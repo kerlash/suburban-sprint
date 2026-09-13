@@ -36,35 +36,46 @@ class RideScene extends Phaser.Scene {
   private speed = 0; private distance = 0; private worldDistance = 0; private elapsed = 0; private roadPhase = 0;
   private running = false; private paused = false; private complete = false; private onTarget = 0; private sampleTime = 0;
   private powerSum = 0; private cadenceSum = 0; private hrSum = 0; private hrTime = 0; private maxPower = 0;
-  private backdrop!: Phaser.GameObjects.Image; private lines!: Phaser.GameObjects.Graphics;
+  private surface!: Phaser.GameObjects.Graphics; private lines!: Phaser.GameObjects.Graphics;
   private minimap!: Phaser.GameObjects.Graphics;
   private rider!: Phaser.GameObjects.Sprite; private shadow!: Phaser.GameObjects.Ellipse; private bus!: Phaser.GameObjects.Container;
-  private rivals: Phaser.GameObjects.Image[] = []; private ghost!: Phaser.GameObjects.Image; private props: Array<{ object: Phaser.GameObjects.Container; z: number; lane: number }> = [];
+  private rivals: Phaser.GameObjects.Image[] = []; private rivalLabels: Phaser.GameObjects.Text[] = []; private ghost!: Phaser.GameObjects.Image; private props: Array<{ object: Phaser.GameObjects.Container; z: number; lane: number }> = [];
   private midProps: Array<{ object: Phaser.GameObjects.Container; z: number; lane: number }> = [];
+  private natureProps: Array<{ object: Phaser.GameObjects.Image; z: number; lane: number; size: number }> = [];
   private clouds: Array<{ object: Phaser.GameObjects.Container; homeX: number; speed: number }> = [];
-  private watts!: Phaser.GameObjects.Text; private cadence!: Phaser.GameObjects.Text; private hr!: Phaser.GameObjects.Text; private speedText!: Phaser.GameObjects.Text;
+  private watts!: Phaser.GameObjects.Text; private wattsPerKg!: Phaser.GameObjects.Text; private cadence!: Phaser.GameObjects.Text; private hr!: Phaser.GameObjects.Text; private speedText!: Phaser.GameObjects.Text;
   private title!: Phaser.GameObjects.Text; private story!: Phaser.GameObjects.Text; private target!: Phaser.GameObjects.Text; private feedback!: Phaser.GameObjects.Text; private lap!: Phaser.GameObjects.Text;
   private stance!: Phaser.GameObjects.Text;
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys; private results?: Phaser.GameObjects.Container; private busZ = .20;
-  private baseRiderScale = 1; private backdropScale = 1; private cameraGap = 0; private powerFollower = hub.data.power;
+  private baseRiderScale = 1; private cameraGap = 0; private powerFollower = hub.data.power;
   private phaseNumber = -1; private lastCountdown = -1; private sentTarget = -1;
   private powerTrace: number[] = []; private ghostTrace: number[] = []; private ghostZ = .24;
-  private slowRiderDistance = .18;
+  private npcRiders = [
+    { distanceKm: .18, wattsPerKg: 1, lane: .30, color: 0xffcf32 },
+    { distanceKm: .52, wattsPerKg: 1.8, lane: -.08, color: 0xbef56f }
+  ];
   private peers: PelotonPeer[] = []; private remoteRiders = new Map<string, Phaser.GameObjects.Image>(); private lastPelotonSend = 0;
 
   constructor() { super('ride'); }
-  preload() { this.load.image('track', './assets/oval-track.png'); this.load.image('riderKey', './assets/rider-rear-keyed.png'); this.load.image('riderCycleKey', './assets/rider-pedal-strip.png'); }
+  preload() {
+    this.load.image('riderKey', './assets/rider-rear-keyed.png'); this.load.image('riderCycleKey', './assets/rider-pedal-strip.png');
+    this.load.image('natureGrass', './assets/nature-grass-clover.png'); this.load.image('natureOak', './assets/nature-oak-tree.png');
+    this.load.image('natureRocks', './assets/nature-rocks-moss.png'); this.load.image('natureShrubs', './assets/nature-berry-shrubs.png');
+    this.load.image('natureFlowers', './assets/nature-wildflowers.png'); this.load.image('naturePine', './assets/nature-pine-tree.png');
+  }
   create() {
     this.keyRider(); this.keyPedalCycle(); const { width, height } = this.scale;
-    this.backdrop = this.add.image(width / 2, height / 2, 'track');
-    this.backdropScale = Math.max(width / this.backdrop.width, height / this.backdrop.height) * 1.07;
-    this.backdrop.setScale(this.backdropScale);
+    this.surface = this.add.graphics().setDepth(0); this.drawTrackSurface();
     this.lines = this.add.graphics().setDepth(1);
     this.clouds = Array.from({ length: 5 }, (_, i) => ({ object: this.makeCloud(i), homeX: width * (i + .25) / 4.5, speed: .09 + i % 3 * .025 }));
-    this.midProps = Array.from({ length: 10 }, (_, i) => ({ object: this.makeMidProp(i), z: .025 + i * .035, lane: i % 2 ? 1.48 : -1.48 }));
-    this.props = Array.from({ length: 16 }, (_, i) => ({ object: this.makeProp(i), z: (i + 1) / 17, lane: i % 2 ? 1.06 : -1.06 }));
+    const nature = [
+      { key: 'natureGrass', size: .48 }, { key: 'natureRocks', size: .40 }, { key: 'natureShrubs', size: .55 },
+      { key: 'natureFlowers', size: .42 }, { key: 'natureOak', size: .92 }, { key: 'naturePine', size: .82 }
+    ];
+    this.natureProps = Array.from({ length: 20 }, (_, i) => { const pick = nature[i % nature.length]; return { object: this.add.image(0, 0, pick.key).setOrigin(.5, 1), z: (i + 1) / 21, lane: i % 2 ? 1.23 : -1.23, size: pick.size }; });
     this.bus = this.makeBus();
     this.rivals = [this.add.image(0, 0, 'rider').setTint(0xc99cff), this.add.image(0, 0, 'rider').setTint(0xbef56f)];
+    this.rivalLabels = this.npcRiders.map(npc => this.add.text(0, 0, `${npc.wattsPerKg.toFixed(1)} W/KG`, { fontFamily: 'Inter', fontSize: 10, color: '#ffffff', fontStyle: 'bold', backgroundColor: '#092f4add', padding: { x: 5, y: 3 } }).setOrigin(.5, 1).setDepth(4));
     this.ghost = this.add.image(0, 0, 'rider').setTint(0x72dcff).setAlpha(.58).setDepth(3).setVisible(false);
     this.shadow = this.add.ellipse(width * .53, height * .89, width * .17, height * .045, 0x07111a, .32).setDepth(4);
     this.rider = this.add.sprite(width * .53, height * .93, 'riderCycle', 0).setOrigin(.5, 1).setDepth(5);
@@ -79,7 +90,8 @@ class RideScene extends Phaser.Scene {
   }
   public startMission() {
     this.results?.destroy(true); this.results = undefined; this.running = true; this.paused = false; this.complete = false; this.elapsed = 0; this.distance = 0;
-    this.onTarget = 0; this.sampleTime = 0; this.powerSum = 0; this.cadenceSum = 0; this.hrSum = 0; this.hrTime = 0; this.maxPower = 0; this.busZ = .20; this.cameraGap = 0; this.powerFollower = this.telemetry.power; this.phaseNumber = -1; this.lastCountdown = -1; this.sentTarget = -1; this.powerTrace = []; this.ghostZ = .24; this.slowRiderDistance = .18;
+    this.onTarget = 0; this.sampleTime = 0; this.powerSum = 0; this.cadenceSum = 0; this.hrSum = 0; this.hrTime = 0; this.maxPower = 0; this.busZ = .20; this.cameraGap = 0; this.powerFollower = this.telemetry.power; this.phaseNumber = -1; this.lastCountdown = -1; this.sentTarget = -1; this.powerTrace = []; this.ghostZ = .24;
+    this.npcRiders[0].distanceKm = .18; this.npcRiders[1].distanceKm = .52;
     const best = loadHistory().filter(ride => ride.workoutId === activeWorkout.id && ride.powerTrace?.length).sort((a, b) => b.onTargetPercent - a.onTargetPercent)[0];
     this.ghostTrace = best?.powerTrace || []; this.ghost.setVisible(ghostEnabled && this.ghostTrace.length > 0); this.bus.setVisible(true);
     missionAudio.cue('start');
@@ -181,7 +193,9 @@ class RideScene extends Phaser.Scene {
     this.target = this.add.text(35, 80, `FTP ${profile.ftp} W  ·  ${activeWorkout.difficulty.toUpperCase()}  ·  ${this.clock(totalSeconds)}`, { fontFamily: 'Inter', fontSize: 12, color: '#6ff0a0', fontStyle: 'bold' }).setDepth(11);
     const start = Math.max(card + 38, width * .40), gap = (width - start - 18) / 4;
     const stat = (x: number, label: string, color: string) => { this.add.rectangle(x, 18, Math.max(94, gap - 9), 94, 0x092f4a, .94).setOrigin(.5, 0).setStrokeStyle(2, 0x2c6d8e).setDepth(10); this.add.text(x, 31, label, { fontFamily: 'Inter', fontSize: 10, color: '#9fc1d3', fontStyle: 'bold' }).setOrigin(.5, 0).setDepth(11); return this.add.text(x, 53, '—', { fontFamily: 'Barlow Condensed', fontSize: Math.min(31, gap * .23), color, fontStyle: 'bold' }).setOrigin(.5, 0).setDepth(11); };
-    this.watts = stat(start + gap * .5, 'POWER', '#ffd042'); this.cadence = stat(start + gap * 1.5, 'CADENCE', '#65e2da'); this.hr = stat(start + gap * 2.5, 'HEART RATE', '#ff6965'); this.speedText = stat(start + gap * 3.5, 'SPEED', '#fff');
+    this.watts = stat(start + gap * .5, 'POWER', '#ffd042');
+    this.wattsPerKg = this.add.text(start + gap * .5, 84, '0.00 W/KG', { fontFamily: 'Inter', fontSize: 12, color: '#ffe99c', fontStyle: 'bold' }).setOrigin(.5, 0).setDepth(11);
+    this.cadence = stat(start + gap * 1.5, 'CADENCE', '#65e2da'); this.hr = stat(start + gap * 2.5, 'HEART RATE', '#ff6965'); this.speedText = stat(start + gap * 3.5, 'SPEED', '#fff');
     this.feedback = this.add.text(width / 2, height - 58, 'START WHEN READY', { fontFamily: 'Barlow Condensed', fontSize: 20, color: '#fff', fontStyle: 'bold', backgroundColor: '#092f4add', padding: { x: 12, y: 5 } }).setOrigin(.5).setDepth(12);
     this.stance = this.add.text(width / 2, height - 92, 'OUT OF SADDLE', { fontFamily: 'Barlow Condensed', fontSize: 18, color: '#ffcf32', fontStyle: 'bold', backgroundColor: '#092f4add', padding: { x: 10, y: 4 } }).setOrigin(.5).setDepth(12).setVisible(false);
     this.lap = this.add.text(width - 25, height - 43, 'LAP 1  ·  0.00 KM', { fontFamily: 'Inter', fontSize: 11, color: '#fff', fontStyle: 'bold' }).setOrigin(1, 0).setDepth(12);
@@ -194,13 +208,33 @@ class RideScene extends Phaser.Scene {
     this.minimap.lineStyle(5, 0xffcf32, .8).strokeEllipse(x + mapW / 2, y + mapH / 2 + 5, mapW - 30, mapH - 30);
     this.minimap.lineStyle(2, 0x7bb6c8, .9).strokeEllipse(x + mapW / 2, y + mapH / 2 + 5, mapW - 45, mapH - 45);
     const dot = (distanceKm: number, color: number, radius: number) => { const t = ((distanceKm % LAP_KM) + LAP_KM) % LAP_KM / LAP_KM, angle = t * Math.PI * 2 - Math.PI / 2, rx = (mapW - 30) / 2, ry = (mapH - 30) / 2; this.minimap.fillStyle(color, 1).fillCircle(x + mapW / 2 + Math.cos(angle) * rx, y + mapH / 2 + 5 + Math.sin(angle) * ry, radius); };
-    dot(this.slowRiderDistance, 0xffcf32, 4);
+    this.npcRiders.forEach(rider => dot(rider.distanceKm, rider.color, 4));
     this.peers.slice(0, 5).forEach(peer => dot(peer.distanceKm, 0x8edbff, 4));
     dot(this.distance, 0xff5c58, 5);
   }
+  private drawTrackSurface() {
+    if (!this.surface) return;
+    const { width, height } = this.scale, horizon = height * .47, g = this.surface;
+    g.clear().fillStyle(0x78d8f5).fillRect(0, 0, width, horizon);
+    g.fillStyle(0xbde977).fillEllipse(width * .18, horizon + 3, width * .68, height * .17).fillEllipse(width * .78, horizon + 6, width * .78, height * .19);
+    g.fillStyle(0x62b94f).fillRect(0, horizon, width, height - horizon);
+    const ribbon = (leftLane: number, rightLane: number, color: number) => {
+      const left: Phaser.Geom.Point[] = [], right: Phaser.Geom.Point[] = [];
+      for (let i = 0; i <= 28; i++) { const z = .012 + i / 28 * .988, a = this.project(z, leftLane), b = this.project(z, rightLane); left.push(new Phaser.Geom.Point(a.x, a.y)); right.unshift(new Phaser.Geom.Point(b.x, b.y)); }
+      g.fillStyle(color).fillPoints([...left, ...right], true);
+    };
+    ribbon(-1.31, 1.31, 0xe8d7a8);
+    ribbon(-1.22, 1.22, 0x506078);
+    ribbon(-1.21, -1.08, 0x4ea5d9); ribbon(1.08, 1.21, 0x4ea5d9);
+    [-.56, 0, .56].forEach(lane => {
+      g.lineStyle(2, 0xaedfff, .82).beginPath();
+      for (let i = 0; i <= 28; i++) { const p = this.project(.012 + i / 28 * .988, lane); if (!i) g.moveTo(p.x, p.y); else g.lineTo(p.x, p.y); }
+      g.strokePath();
+    });
+  }
   private project(z: number, lane = 0) {
-    const { width, height } = this.scale, d = Math.pow(Phaser.Math.Clamp(z, 0, 1), 1.7), half = width * (.15 + d * .52), bend = -.032 + Math.sin((this.worldDistance % LAP_KM) / LAP_KM * Math.PI * 2) * .017;
-    return { x: width * .53 + bend * width * d * d + lane * half, y: height * .47 + d * height * .53, scale: .055 + d * .72 };
+    const { width, height } = this.scale, d = Math.pow(Phaser.Math.Clamp(z, 0, 1), 1.7), half = width * (.15 + d * .52), turn = Math.sin((this.worldDistance % LAP_KM) / LAP_KM * Math.PI * 2), bend = -.032 + turn * .05;
+    return { x: width * .53 + bend * width * d * d + lane * half, y: height * .47 + d * height * .53 + lane * turn * d * height * .032, scale: .055 + d * .72 };
   }
   private activePhase() { let at = 0; for (let index = 0; index < phases.length; index++) { const phase = phases[index], end = at + phase.seconds; if (this.elapsed < end) return { phase, end, index }; at = end; } return { phase: phases[phases.length - 1], end: totalSeconds, index: phases.length - 1 }; }
   private clock(seconds: number) { const v = Math.max(0, Math.ceil(seconds)); return `${Math.floor(v / 60)}:${String(v % 60).padStart(2, '0')}`; }
@@ -278,23 +312,20 @@ class RideScene extends Phaser.Scene {
       const travelX = this.worldDistance * 1000 * cloud.speed + time * .0025 * (i % 2 ? 1 : .7);
       cloud.object.x = Phaser.Math.Wrap(cloud.homeX - travelX, -160, span - 160);
     });
-    this.midProps.forEach((p, i) => {
-      p.z += this.speed * dt * .0065;
-      if (p.z > .39) { p.z = .018; p.lane = i % 2 ? 1.48 : -1.48; }
-      const pos = this.project(p.z, p.lane);
-      p.object.setPosition(pos.x, pos.y).setScale(pos.scale * 1.55).setDepth(.55 + p.z).setAlpha(Phaser.Math.Clamp(p.z * 8, .18, .9));
-    });
-    this.props.forEach((p, i) => { p.z += this.speed * dt * .025; if (p.z > 1.04) { p.z -= 1; p.lane = i % 2 ? 1.06 : -1.06; } const pos = this.project(p.z, p.lane); p.object.setPosition(pos.x, pos.y).setScale(pos.scale * .82).setDepth(1.5 + p.z * 2.2).setAlpha(Phaser.Math.Clamp(p.z * 5, 0, 1)); });
+    this.natureProps.forEach((p, i) => { p.z += this.speed * dt * .021; if (p.z > 1.04) { p.z -= 1; p.lane = i % 2 ? 1.23 : -1.23; } const pos = this.project(p.z, p.lane); p.object.setPosition(pos.x, pos.y).setScale(pos.scale * p.size).setDepth(1.35 + p.z * 2.1).setAlpha(Phaser.Math.Clamp(p.z * 5, 0, 1)); });
     const bus = this.project(this.busZ, .18); this.bus.setPosition(bus.x, bus.y).setScale(bus.scale); [{ z: .27, lane: -.08 }, { z: .20, lane: .34 }].forEach((d, i) => { const pos = this.project(d.z, d.lane); this.rivals[i].setPosition(pos.x, pos.y).setOrigin(.5, 1).setScale(pos.scale * .29).setDepth(3); });
     if (this.ghost.visible) { const ghost = this.project(this.ghostZ, -.34); this.ghost.setPosition(ghost.x, ghost.y).setOrigin(.5, 1).setScale(ghost.scale * .29); }
-    this.slowRiderDistance += this.running && !this.paused ? dt * .0055 : 0;
-    [{ distanceKm: this.slowRiderDistance, lane: .30 }, { distanceKm: this.slowRiderDistance + .34, lane: -.08 }].forEach((rival, i) => { const z = Phaser.Math.Clamp(.23 + (this.distance - rival.distanceKm) * 2.3, .08, .48), pos = this.project(z, rival.lane); this.rivals[i].setPosition(pos.x, pos.y).setOrigin(.5, 1).setScale(pos.scale * .29).setDepth(3); });
+    if (this.running && !this.paused) { this.npcRiders[0].distanceKm += dt * .0055; this.npcRiders[1].distanceKm += dt * .0078; }
+    this.npcRiders.forEach((npc, i) => {
+      const relative = Phaser.Math.Wrap(npc.distanceKm - this.distance + LAP_KM / 2, 0, LAP_KM) - LAP_KM / 2;
+      const visible = relative >= -.018 && relative <= .18;
+      const z = Phaser.Math.Clamp(.48 - relative * 2.22, .08, .52), pos = this.project(z, npc.lane);
+      this.rivals[i].setVisible(visible).setPosition(pos.x, pos.y).setOrigin(.5, 1).setScale(pos.scale * .29).setDepth(3);
+      this.rivalLabels[i].setVisible(visible).setPosition(pos.x, pos.y - Math.max(18, pos.scale * 270)).setAlpha(Phaser.Math.Clamp(pos.scale * 4, .45, 1));
+    });
     this.peers.forEach((peer, index) => { const z = Phaser.Math.Clamp(.23 + (this.distance - peer.distanceKm) * 2.3, .08, .48), pos = this.project(z, -.22 + index * .15); this.remoteRiders.get(peer.id)?.setPosition(pos.x, pos.y).setOrigin(.5, 1).setScale(pos.scale * .29); });
     if (time - this.lastPelotonSend > 250) { this.lastPelotonSend = time; peloton.publish(profile.name, activeWorkout.id, power, this.distance); }
-    const orbit = this.worldDistance / LAP_KM * Math.PI * 2;
-    this.backdrop.setPosition(this.scale.width / 2 + Math.sin(orbit) * this.scale.width * .028, this.scale.height / 2 + Math.cos(orbit) * this.scale.height * .006);
-    this.backdrop.setScale(this.backdropScale * (1 + Math.sin(orbit * .5) * .004));
-    this.drawLines(); this.drawMinimap(); const weightKg = Math.max(1, profile.weightLb * .453592), wkg = power / weightKg; this.watts.setText(`${Math.round(power)} W\n${wkg.toFixed(2)} W/KG`).setFontSize(23); this.cadence.setText(`${Math.round(this.telemetry.cadence)} RPM`); this.hr.setText(this.telemetry.heartRate ? `${Math.round(this.telemetry.heartRate)} BPM` : '—'); this.speedText.setText(`${(this.speed * 3.6).toFixed(1)} KPH`); this.lap.setText(`LAP ${Math.floor(this.distance / LAP_KM) + 1}  ·  ${this.distance.toFixed(2)} KM  ·  ${this.clock(totalSeconds - this.elapsed)}`);
+    this.drawTrackSurface(); this.drawLines(); this.drawMinimap(); const weightKg = Math.max(1, profile.weightLb * .453592), wkg = power / weightKg; this.watts.setText(`${Math.round(power)} W`); this.wattsPerKg.setText(`${wkg.toFixed(2)} W/KG`); this.cadence.setText(`${Math.round(this.telemetry.cadence)} RPM`); this.hr.setText(this.telemetry.heartRate ? `${Math.round(this.telemetry.heartRate)} BPM` : '—'); this.speedText.setText(`${(this.speed * 3.6).toFixed(1)} KPH`); this.lap.setText(`LAP ${Math.floor(this.distance / LAP_KM) + 1}  ·  ${this.distance.toFixed(2)} KM  ·  ${this.clock(totalSeconds - this.elapsed)}`);
   }
 }
 
@@ -369,6 +400,13 @@ window.addEventListener('ridehistorychanged', renderHistory);
 hub.addEventListener('controlstatus', event => { status.textContent = (event as CustomEvent<string>).detail; });
 window.addEventListener('controlerror', event => { void hub.disableTrainerControl(); erg.classList.remove('connected'); erg.querySelector('span')!.textContent = 'Enable ERG'; status.textContent = (event as CustomEvent<string>).detail; });
 peloton.addEventListener('peers', event => { const count = (event as CustomEvent<PelotonPeer[]>).detail.length; roomStatus.textContent = count ? `LOCAL PELOTON · ${count + 1} RIDERS` : 'LOCAL PELOTON · SOLO'; });
+
+void hub.autoReconnect().then(remembered => {
+  const connected: string[] = [];
+  if (remembered.trainerName) { trainer.classList.add('connected'); trainer.querySelector('span')!.textContent = remembered.trainerName; demo.checked = false; erg.disabled = !hub.trainerControlAvailable; connected.push(remembered.trainerName); }
+  if (remembered.hrName) { hr.classList.add('connected'); hr.querySelector('span')!.textContent = remembered.hrName; connected.push(remembered.hrName); }
+  if (connected.length) status.textContent = `Reconnected automatically: ${connected.join(' + ')}.`;
+}).catch(() => { /* Previously granted devices may be off; manual scan buttons remain available. */ });
 
 let installPrompt: Event | undefined;
 window.addEventListener('beforeinstallprompt', event => { event.preventDefault(); installPrompt = event; installButton.hidden = false; });
