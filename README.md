@@ -22,7 +22,9 @@ Localhost is treated as a secure browser context. A deployed build must use HTTP
 - 10-minute Bus Chase, 20-minute Neighborhood Tempo, and 30-minute Neighborhood Crit
 - FTP-scaled numeric targets, cadence objectives, story prompts, three-second countdowns, and synthesized audio cues
 - Cadence-driven four-frame pedal animation, power-surge camera tracking, and multi-depth scenery motion
-- A reusable procedural velodrome surface with grass verges, a softly graded sky, changing distant hills, multiple cloud silhouettes, curved perspective, and visible banked-turn approaches, plus six transparent nature props and six event-day sideline props
+- A reusable procedural velodrome surface with grass verges, a softly graded sky, changing distant hills, multiple cloud silhouettes, and two consistently right-hand banked turns
+- A fixed 1 km scenery layout: landmarks and vegetation return at the same distance every lap, including a yellow sprint-cue house at 0.25 km and a coral house at 0.74 km
+- Thirteen transparent nature and landmark props plus six event-day sideline props
 - Editable rider name, FTP, weight, sound preference, fullscreen mode, and pause/resume
 - Browser-local ride history with TP training load, average %FTP, average/max power, cadence, heart rate, distance, average speed, and target score. The course is a repeating 1 km oval with a live minimap.
 - The power tile shows watts and watts per kilogram (W/kg), and the labeled minimap includes virtual 1.0 and 1.8 W/kg pacers so you can catch, pass, and lap them while testing position tracking. Free riding advances the course and map even before a mission is started.
