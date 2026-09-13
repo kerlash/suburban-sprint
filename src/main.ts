@@ -43,6 +43,7 @@ class RideScene extends Phaser.Scene {
   private clouds: Array<{ object: Phaser.GameObjects.Container; homeX: number; speed: number }> = [];
   private watts!: Phaser.GameObjects.Text; private cadence!: Phaser.GameObjects.Text; private hr!: Phaser.GameObjects.Text; private speedText!: Phaser.GameObjects.Text;
   private title!: Phaser.GameObjects.Text; private story!: Phaser.GameObjects.Text; private target!: Phaser.GameObjects.Text; private feedback!: Phaser.GameObjects.Text; private lap!: Phaser.GameObjects.Text;
+  private stance!: Phaser.GameObjects.Text;
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys; private results?: Phaser.GameObjects.Container; private busZ = .20;
   private baseRiderScale = 1; private backdropScale = 1; private cameraGap = 0; private powerFollower = hub.data.power;
   private phaseNumber = -1; private lastCountdown = -1; private sentTarget = -1;
@@ -180,6 +181,7 @@ class RideScene extends Phaser.Scene {
     const stat = (x: number, label: string, color: string) => { this.add.rectangle(x, 18, Math.max(94, gap - 9), 94, 0x092f4a, .94).setOrigin(.5, 0).setStrokeStyle(2, 0x2c6d8e).setDepth(10); this.add.text(x, 31, label, { fontFamily: 'Inter', fontSize: 10, color: '#9fc1d3', fontStyle: 'bold' }).setOrigin(.5, 0).setDepth(11); return this.add.text(x, 53, '—', { fontFamily: 'Barlow Condensed', fontSize: Math.min(31, gap * .23), color, fontStyle: 'bold' }).setOrigin(.5, 0).setDepth(11); };
     this.watts = stat(start + gap * .5, 'POWER', '#ffd042'); this.cadence = stat(start + gap * 1.5, 'CADENCE', '#65e2da'); this.hr = stat(start + gap * 2.5, 'HEART RATE', '#ff6965'); this.speedText = stat(start + gap * 3.5, 'SPEED', '#fff');
     this.feedback = this.add.text(width / 2, height - 58, 'START WHEN READY', { fontFamily: 'Barlow Condensed', fontSize: 20, color: '#fff', fontStyle: 'bold', backgroundColor: '#092f4add', padding: { x: 12, y: 5 } }).setOrigin(.5).setDepth(12);
+    this.stance = this.add.text(width / 2, height - 92, 'OUT OF SADDLE', { fontFamily: 'Barlow Condensed', fontSize: 18, color: '#ffcf32', fontStyle: 'bold', backgroundColor: '#092f4add', padding: { x: 10, y: 4 } }).setOrigin(.5).setDepth(12).setVisible(false);
     this.lap = this.add.text(width - 25, height - 43, 'LAP 1  ·  0.00 KM', { fontFamily: 'Inter', fontSize: 11, color: '#fff', fontStyle: 'bold' }).setOrigin(1, 0).setDepth(12);
   }
   private project(z: number, lane = 0) {
@@ -239,7 +241,7 @@ class RideScene extends Phaser.Scene {
       else if (power < goal * .9) this.feedback.setText(`PUSH  +${Math.max(1, Math.round(goal - power))} W`).setColor('#ffcf32'); else if (power > goal * 1.1) this.feedback.setText(`EASE  ${Math.round(power - goal)} W`).setColor('#ff8a75'); else if (!cadenceOk) this.feedback.setText(`QUICKER FEET  ${phase.cadence}+ RPM`).setColor('#65e2da'); else this.feedback.setText('RIGHT ON TARGET').setColor('#6ff0a0');
       if (this.elapsed >= totalSeconds) this.finish();
     } else if (this.complete) { this.title.setText('⚑  MISSION COMPLETE'); this.story.setText('The bus has been caught. Its dignity has not recovered.'); this.target.setText(`FTP ${profile.ftp} W  ·  ${this.distance.toFixed(2)} KM  ·  ${(this.distance / LAP_KM).toFixed(1)} LAPS`); this.feedback.setText('RIDE COMPLETE').setColor('#6ff0a0'); }
-    const steer = (this.cursors?.left.isDown ? -1 : 0) + (this.cursors?.right.isDown ? 1 : 0), bob = Math.sin(time * .011 * Math.max(.5, this.telemetry.cadence / 85)), standing = power > Math.max(120, profile.ftp * .82) && this.telemetry.cadence > 0 && this.telemetry.cadence < 72;
+    const steer = (this.cursors?.left.isDown ? -1 : 0) + (this.cursors?.right.isDown ? 1 : 0), bob = Math.sin(time * .011 * Math.max(.5, this.telemetry.cadence / 85)), standing = power > Math.max(120, profile.ftp * .78) && this.telemetry.cadence > 0 && this.telemetry.cadence < 78;
     this.powerFollower += (power - this.powerFollower) * (1 - Math.exp(-dt * .7));
     const surge = Phaser.Math.Clamp((power - this.powerFollower) / 85, 0, 1);
     const gapTarget = surge * this.scale.height * .028;
@@ -249,6 +251,7 @@ class RideScene extends Phaser.Scene {
     this.rider.y = this.scale.height * .93 - this.cameraGap + bob * (standing ? 1.25 : .65) - (standing ? 2 : 0);
     this.rider.setScale(this.baseRiderScale * cameraScale * (standing ? 1.015 : 1));
     this.rider.rotation = steer * .045 + Math.sin(time * .004) * .002 + (standing ? Math.sin(time * .007) * .012 : 0);
+    this.stance.setVisible(standing);
     if (this.telemetry.cadence < 5) {
       if (!this.rider.anims.isPaused) this.rider.anims.pause();
     } else {
