@@ -17,6 +17,8 @@ button:hover { transform: translateY(-1px); background: #17415d; }
 button:active { transform: translateY(2px); box-shadow: 0 2px 0 #03111d; }
 #mission-button { color: #102938; background: #ffcf32; border-color: #ffe681; box-shadow: 0 4px 0 #9b6812; }
 #mission-button:hover { background: #ffdc65; }
+#end-workout-button { color: #fff; background: #a93e4b; border-color: #e16b75; }
+#end-workout-button:hover { background: #c94e5b; }
 #mission-button:active { transform: translateY(2px); box-shadow: 0 2px 0 #9b6812; }
 button i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 7px; background: #78909c; }
 button.connected i { background: #67df7a; box-shadow: 0 0 8px #67df7a; }
