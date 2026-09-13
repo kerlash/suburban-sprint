@@ -45,6 +45,7 @@ class RideScene extends Phaser.Scene {
   private clouds: Array<{ object: Phaser.GameObjects.Container; homeX: number; speed: number }> = [];
   private watts!: Phaser.GameObjects.Text; private wattsPerKg!: Phaser.GameObjects.Text; private cadence!: Phaser.GameObjects.Text; private hr!: Phaser.GameObjects.Text; private speedText!: Phaser.GameObjects.Text;
   private title!: Phaser.GameObjects.Text; private story!: Phaser.GameObjects.Text; private target!: Phaser.GameObjects.Text; private feedback!: Phaser.GameObjects.Text; private lap!: Phaser.GameObjects.Text;
+  private minimapKey!: Phaser.GameObjects.Text;
   private stance!: Phaser.GameObjects.Text;
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys; private results?: Phaser.GameObjects.Container; private busZ = .20;
   private baseRiderScale = 1; private cameraGap = 0; private powerFollower = hub.data.power;
@@ -89,7 +90,7 @@ class RideScene extends Phaser.Scene {
     this.scale.on('resize', () => this.scene.restart());
   }
   public startMission() {
-    this.results?.destroy(true); this.results = undefined; this.running = true; this.paused = false; this.complete = false; this.elapsed = 0; this.distance = 0;
+    this.results?.destroy(true); this.results = undefined; this.running = true; this.paused = false; this.complete = false; this.elapsed = 0; this.distance = 0; this.worldDistance = 0;
     this.onTarget = 0; this.sampleTime = 0; this.powerSum = 0; this.cadenceSum = 0; this.hrSum = 0; this.hrTime = 0; this.maxPower = 0; this.busZ = .20; this.cameraGap = 0; this.powerFollower = this.telemetry.power; this.phaseNumber = -1; this.lastCountdown = -1; this.sentTarget = -1; this.powerTrace = []; this.ghostZ = .24;
     this.npcRiders[0].distanceKm = .18; this.npcRiders[1].distanceKm = .52;
     const best = loadHistory().filter(ride => ride.workoutId === activeWorkout.id && ride.powerTrace?.length).sort((a, b) => b.onTargetPercent - a.onTargetPercent)[0];
@@ -164,9 +165,13 @@ class RideScene extends Phaser.Scene {
   }
   private makeCloud(i: number) {
     const c = this.add.container(0, this.scale.height * (.105 + i % 2 * .04)).setDepth(.25).setAlpha(.42), g = this.add.graphics();
-    g.fillStyle(0xffffff, .9).fillEllipse(-28, 5, 68, 24).fillCircle(-5, -5, 23).fillCircle(20, 1, 17).fillCircle(-32, 2, 14);
-    g.fillStyle(0xb8e8f4, .55).fillEllipse(-2, 11, 74, 11);
-    return c.add(g).setScale(.42 + i % 3 * .09);
+    g.fillStyle(0xffffff, .92);
+    if (i % 4 === 0) g.fillEllipse(-32, 4, 88, 15).fillEllipse(22, 1, 54, 11);
+    else if (i % 4 === 1) g.fillEllipse(-28, 5, 68, 24).fillCircle(-5, -5, 23).fillCircle(20, 1, 17).fillCircle(-32, 2, 14);
+    else if (i % 4 === 2) g.fillCircle(-27, 4, 13).fillCircle(-7, -4, 19).fillCircle(16, 3, 14).fillEllipse(-5, 9, 69, 16);
+    else g.fillEllipse(-25, 6, 72, 18).fillEllipse(10, -3, 64, 20).fillCircle(-3, -11, 16);
+    g.fillStyle(0xb8e8f4, .5).fillEllipse(-2, 11, i % 4 === 0 ? 112 : 78, 9);
+    return c.add(g).setScale(.38 + i % 3 * .10);
   }
   private makeMidProp(i: number) {
     const c = this.add.container(0, 0).setDepth(.8), g = this.add.graphics();
@@ -200,6 +205,7 @@ class RideScene extends Phaser.Scene {
     this.stance = this.add.text(width / 2, height - 92, 'OUT OF SADDLE', { fontFamily: 'Barlow Condensed', fontSize: 18, color: '#ffcf32', fontStyle: 'bold', backgroundColor: '#092f4add', padding: { x: 10, y: 4 } }).setOrigin(.5).setDepth(12).setVisible(false);
     this.lap = this.add.text(width - 25, height - 43, 'LAP 1  ·  0.00 KM', { fontFamily: 'Inter', fontSize: 11, color: '#fff', fontStyle: 'bold' }).setOrigin(1, 0).setDepth(12);
     this.minimap = this.add.graphics().setDepth(12);
+    this.minimapKey = this.add.text(width - 128, height - 168, 'RED: YOU   YELLOW: 1.0   GREEN: 1.8', { fontFamily: 'Inter', fontSize: 8, color: '#ffffff', fontStyle: 'bold' }).setOrigin(.5, 0).setDepth(13);
   }
   private drawMinimap() {
     const { width, height } = this.scale, mapW = 213, mapH = 123, x = width - mapW - 22, y = height - mapH - 54;
@@ -210,13 +216,24 @@ class RideScene extends Phaser.Scene {
     const dot = (distanceKm: number, color: number, radius: number) => { const t = ((distanceKm % LAP_KM) + LAP_KM) % LAP_KM / LAP_KM, angle = t * Math.PI * 2 - Math.PI / 2, rx = (mapW - 30) / 2, ry = (mapH - 30) / 2; this.minimap.fillStyle(color, 1).fillCircle(x + mapW / 2 + Math.cos(angle) * rx, y + mapH / 2 + 5 + Math.sin(angle) * ry, radius); };
     this.npcRiders.forEach(rider => dot(rider.distanceKm, rider.color, 4));
     this.peers.slice(0, 5).forEach(peer => dot(peer.distanceKm, 0x8edbff, 4));
-    dot(this.distance, 0xff5c58, 5);
+    dot(this.currentTrackDistance(), 0xff5c58, 5);
+  }
+  private currentTrackDistance() { return this.running || this.complete ? this.distance : this.worldDistance; }
+  private courseTurn(distanceKm: number) {
+    const t = ((distanceKm % LAP_KM) + LAP_KM) % LAP_KM / LAP_KM;
+    if (t >= .22 && t < .50) return Math.sin((t - .22) / .28 * Math.PI);
+    if (t >= .72) return -Math.sin((t - .72) / .28 * Math.PI);
+    return 0;
   }
   private drawTrackSurface() {
     if (!this.surface) return;
-    const { width, height } = this.scale, horizon = height * .47, g = this.surface;
-    g.clear().fillStyle(0x78d8f5).fillRect(0, 0, width, horizon);
-    g.fillStyle(0xbde977).fillEllipse(width * .18, horizon + 3, width * .68, height * .17).fillEllipse(width * .78, horizon + 6, width * .78, height * .19);
+    const { width, height } = this.scale, horizon = height * .47, g = this.surface, bands = 22;
+    g.clear();
+    const top = { r: 73, g: 190, b: 235 }, bottom = { r: 187, g: 235, b: 252 };
+    for (let i = 0; i < bands; i++) { const mix = i / (bands - 1), color = Phaser.Display.Color.GetColor(Math.round(Phaser.Math.Linear(top.r, bottom.r, mix)), Math.round(Phaser.Math.Linear(top.g, bottom.g, mix)), Math.round(Phaser.Math.Linear(top.b, bottom.b, mix))); g.fillStyle(color).fillRect(0, i * horizon / bands, width, horizon / bands + 1); }
+    const orbit = this.currentTrackDistance() / LAP_KM * Math.PI * 2, hillShift = Math.sin(orbit) * width * .13, hillLift = Math.cos(orbit * 2) * height * .025;
+    g.fillStyle(0xa7dc68).fillEllipse(width * .16 + hillShift, horizon + hillLift, width * .72, height * .16).fillEllipse(width * .76 - hillShift * .55, horizon - hillLift * .45, width * .82, height * .21);
+    g.fillStyle(0x78c557).fillEllipse(width * .48 - hillShift * .35, horizon + height * .045, width * .88, height * (.12 + Math.abs(Math.sin(orbit)) * .035));
     g.fillStyle(0x62b94f).fillRect(0, horizon, width, height - horizon);
     const ribbon = (leftLane: number, rightLane: number, color: number) => {
       const left: Phaser.Geom.Point[] = [], right: Phaser.Geom.Point[] = [];
@@ -233,8 +250,8 @@ class RideScene extends Phaser.Scene {
     });
   }
   private project(z: number, lane = 0) {
-    const { width, height } = this.scale, d = Math.pow(Phaser.Math.Clamp(z, 0, 1), 1.7), half = width * (.15 + d * .52), turn = Math.sin((this.worldDistance % LAP_KM) / LAP_KM * Math.PI * 2), bend = -.032 + turn * .05;
-    return { x: width * .53 + bend * width * d * d + lane * half, y: height * .47 + d * height * .53 + lane * turn * d * height * .032, scale: .055 + d * .72 };
+    const { width, height } = this.scale, d = Math.pow(Phaser.Math.Clamp(z, 0, 1), 1.7), half = width * (.15 + d * .52), courseDistance = this.currentTrackDistance(), upcomingTurn = this.courseTurn(courseDistance + (1 - d) * .18), currentTurn = this.courseTurn(courseDistance);
+    return { x: width * .53 + upcomingTurn * width * (1 - d) * .22 + lane * half, y: height * .47 + d * height * .53 + lane * currentTurn * d * height * .05, scale: .055 + d * .72 };
   }
   private activePhase() { let at = 0; for (let index = 0; index < phases.length; index++) { const phase = phases[index], end = at + phase.seconds; if (this.elapsed < end) return { phase, end, index }; at = end; } return { phase: phases[phases.length - 1], end: totalSeconds, index: phases.length - 1 }; }
   private clock(seconds: number) { const v = Math.max(0, Math.ceil(seconds)); return `${Math.floor(v / 60)}:${String(v % 60).padStart(2, '0')}`; }
@@ -315,9 +332,10 @@ class RideScene extends Phaser.Scene {
     this.natureProps.forEach((p, i) => { p.z += this.speed * dt * .021; if (p.z > 1.04) { p.z -= 1; p.lane = i % 2 ? 1.23 : -1.23; } const pos = this.project(p.z, p.lane); p.object.setPosition(pos.x, pos.y).setScale(pos.scale * p.size).setDepth(1.35 + p.z * 2.1).setAlpha(Phaser.Math.Clamp(p.z * 5, 0, 1)); });
     const bus = this.project(this.busZ, .18); this.bus.setPosition(bus.x, bus.y).setScale(bus.scale); [{ z: .27, lane: -.08 }, { z: .20, lane: .34 }].forEach((d, i) => { const pos = this.project(d.z, d.lane); this.rivals[i].setPosition(pos.x, pos.y).setOrigin(.5, 1).setScale(pos.scale * .29).setDepth(3); });
     if (this.ghost.visible) { const ghost = this.project(this.ghostZ, -.34); this.ghost.setPosition(ghost.x, ghost.y).setOrigin(.5, 1).setScale(ghost.scale * .29); }
-    if (this.running && !this.paused) { this.npcRiders[0].distanceKm += dt * .0055; this.npcRiders[1].distanceKm += dt * .0078; }
+    if (!this.paused && !this.complete) { this.npcRiders[0].distanceKm += dt * .0055; this.npcRiders[1].distanceKm += dt * .0078; }
+    const riderTrackDistance = this.currentTrackDistance();
     this.npcRiders.forEach((npc, i) => {
-      const relative = Phaser.Math.Wrap(npc.distanceKm - this.distance + LAP_KM / 2, 0, LAP_KM) - LAP_KM / 2;
+      const relative = Phaser.Math.Wrap(npc.distanceKm - riderTrackDistance + LAP_KM / 2, 0, LAP_KM) - LAP_KM / 2;
       const visible = relative >= -.018 && relative <= .18;
       const z = Phaser.Math.Clamp(.48 - relative * 2.22, .08, .52), pos = this.project(z, npc.lane);
       this.rivals[i].setVisible(visible).setPosition(pos.x, pos.y).setOrigin(.5, 1).setScale(pos.scale * .29).setDepth(3);
@@ -325,7 +343,7 @@ class RideScene extends Phaser.Scene {
     });
     this.peers.forEach((peer, index) => { const z = Phaser.Math.Clamp(.23 + (this.distance - peer.distanceKm) * 2.3, .08, .48), pos = this.project(z, -.22 + index * .15); this.remoteRiders.get(peer.id)?.setPosition(pos.x, pos.y).setOrigin(.5, 1).setScale(pos.scale * .29); });
     if (time - this.lastPelotonSend > 250) { this.lastPelotonSend = time; peloton.publish(profile.name, activeWorkout.id, power, this.distance); }
-    this.drawTrackSurface(); this.drawLines(); this.drawMinimap(); const weightKg = Math.max(1, profile.weightLb * .453592), wkg = power / weightKg; this.watts.setText(`${Math.round(power)} W`); this.wattsPerKg.setText(`${wkg.toFixed(2)} W/KG`); this.cadence.setText(`${Math.round(this.telemetry.cadence)} RPM`); this.hr.setText(this.telemetry.heartRate ? `${Math.round(this.telemetry.heartRate)} BPM` : '—'); this.speedText.setText(`${(this.speed * 3.6).toFixed(1)} KPH`); this.lap.setText(`LAP ${Math.floor(this.distance / LAP_KM) + 1}  ·  ${this.distance.toFixed(2)} KM  ·  ${this.clock(totalSeconds - this.elapsed)}`);
+    this.drawTrackSurface(); this.drawLines(); this.drawMinimap(); const weightKg = Math.max(1, profile.weightLb * .453592), wkg = power / weightKg, displayDistance = this.currentTrackDistance(); this.watts.setText(`${Math.round(power)} W`); this.wattsPerKg.setText(`${wkg.toFixed(2)} W/KG`); this.cadence.setText(`${Math.round(this.telemetry.cadence)} RPM`); this.hr.setText(this.telemetry.heartRate ? `${Math.round(this.telemetry.heartRate)} BPM` : '—'); this.speedText.setText(`${(this.speed * 3.6).toFixed(1)} KPH`); this.lap.setText(`LAP ${Math.floor(displayDistance / LAP_KM) + 1}  ·  ${displayDistance.toFixed(2)} KM  ·  ${this.clock(totalSeconds - this.elapsed)}`);
   }
 }
 
