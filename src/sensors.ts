@@ -22,6 +22,7 @@ interface GattServerLike {
 }
 
 interface BluetoothDeviceLike extends EventTarget {
+  id?: string;
   name?: string;
   gatt?: { connect(): Promise<GattServerLike> };
 }
@@ -29,6 +30,7 @@ interface BluetoothDeviceLike extends EventTarget {
 type BluetoothLike = Navigator & {
   bluetooth?: {
     requestDevice(options: unknown): Promise<BluetoothDeviceLike>;
+    getDevices?(): Promise<BluetoothDeviceLike[]>;
   };
 };
 
@@ -39,6 +41,8 @@ const CYCLING_POWER = 0x1818;
 const CYCLING_POWER_MEASUREMENT = 0x2a63;
 const HEART_RATE = 0x180d;
 const HEART_RATE_MEASUREMENT = 0x2a37;
+const LAST_TRAINER = 'suburban-sprint-last-trainer';
+const LAST_HEART_RATE = 'suburban-sprint-last-heart-rate';
 
 export class SensorHub extends EventTarget {
   readonly data: Telemetry = { power: 0, cadence: 0, heartRate: 0 };
@@ -67,6 +71,10 @@ export class SensorHub extends EventTarget {
       filters: [{ services: [FTMS] }, { services: [CYCLING_POWER] }],
       optionalServices: [FTMS, CYCLING_POWER]
     });
+    return this.connectTrainerDevice(device);
+  }
+
+  private async connectTrainerDevice(device: BluetoothDeviceLike) {
     const server = await device.gatt?.connect();
     if (!server) throw new Error('The trainer did not expose a Bluetooth GATT server.');
 
@@ -91,6 +99,7 @@ export class SensorHub extends EventTarget {
       });
     }
     const trainerName = device.name || 'Trainer';
+    if (device.id) localStorage.setItem(LAST_TRAINER, device.id);
     this.data.trainerName = trainerName;
     this.demoEnabled = false;
     this.changed();
@@ -178,6 +187,10 @@ export class SensorHub extends EventTarget {
 
   async connectHeartRate() {
     const device = await this.bluetooth().requestDevice({ filters: [{ services: [HEART_RATE] }] });
+    return this.connectHeartRateDevice(device);
+  }
+
+  private async connectHeartRateDevice(device: BluetoothDeviceLike) {
     const server = await device.gatt?.connect();
     if (!server) throw new Error('The heart-rate sensor did not expose a Bluetooth GATT server.');
     const service = await server.getPrimaryService(HEART_RATE);
@@ -190,6 +203,7 @@ export class SensorHub extends EventTarget {
       this.changed();
     });
     const hrName = device.name || 'Heart-rate sensor';
+    if (device.id) localStorage.setItem(LAST_HEART_RATE, device.id);
     this.data.hrName = hrName;
     this.changed();
     device.addEventListener('gattserverdisconnected', () => {
@@ -198,6 +212,19 @@ export class SensorHub extends EventTarget {
       this.changed();
     });
     return hrName;
+  }
+
+  async autoReconnect() {
+    const bluetooth = this.bluetooth();
+    if (!bluetooth.getDevices) return {};
+    const devices = await bluetooth.getDevices();
+    const trainerId = localStorage.getItem(LAST_TRAINER), heartRateId = localStorage.getItem(LAST_HEART_RATE);
+    const result: { trainerName?: string; hrName?: string } = {};
+    const trainer = devices.find(device => device.id === trainerId);
+    const heartRate = devices.find(device => device.id === heartRateId);
+    if (trainer) try { result.trainerName = await this.connectTrainerDevice(trainer); } catch { /* The scan button remains available. */ }
+    if (heartRate && heartRate !== trainer) try { result.hrName = await this.connectHeartRateDevice(heartRate); } catch { /* The scan button remains available. */ }
+    return result;
   }
 
   updateDemo(now: number) {
