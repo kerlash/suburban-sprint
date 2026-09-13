@@ -74,17 +74,27 @@ class RideScene extends Phaser.Scene {
     this.clouds = Array.from({ length: 5 }, (_, i) => ({ object: this.makeCloud(i), homeX: width * (i + .25) / 4.5, speed: .09 + i % 3 * .025 }));
     const sceneryLayout = [
       { key: 'natureGrass', trackKm: .02, lane: -1.24, size: .46 }, { key: 'natureRocks', trackKm: .055, lane: 1.24, size: .38 },
+      { key: 'natureFlowerBunch', trackKm: .072, lane: -1.25, size: .35 },
       { key: 'natureOak', trackKm: .095, lane: -1.29, size: .72 }, { key: 'natureShrubs', trackKm: .135, lane: 1.25, size: .48 },
+      { key: 'natureGrass', trackKm: .158, lane: -1.24, size: .41 },
       { key: 'natureBirch', trackKm: .175, lane: -1.28, size: .65 }, { key: 'natureFlowers', trackKm: .215, lane: 1.24, size: .38 },
       { key: 'yellowHouse', trackKm: .25, lane: -1.48, size: .34 }, { key: 'natureMaple', trackKm: .295, lane: 1.29, size: .67 },
+      { key: 'natureShrubs', trackKm: .272, lane: 1.25, size: .42 },
       { key: 'natureOrnamental', trackKm: .335, lane: -1.24, size: .42 }, { key: 'natureHydrangea', trackKm: .375, lane: 1.25, size: .44 },
+      { key: 'natureRocks', trackKm: .352, lane: 1.24, size: .34 },
       { key: 'naturePine', trackKm: .415, lane: -1.29, size: .67 }, { key: 'natureRocks', trackKm: .455, lane: 1.24, size: .38 },
+      { key: 'natureFlowers', trackKm: .438, lane: 1.24, size: .32 },
       { key: 'natureGrass', trackKm: .495, lane: -1.24, size: .46 }, { key: 'natureFlowerBunch', trackKm: .535, lane: 1.24, size: .42 },
+      { key: 'natureOrnamental', trackKm: .555, lane: -1.24, size: .36 },
       { key: 'natureOak', trackKm: .575, lane: -1.29, size: .72 }, { key: 'natureShrubs', trackKm: .615, lane: 1.25, size: .48 },
       { key: 'natureBirch', trackKm: .655, lane: -1.28, size: .65 }, { key: 'natureOrnamental', trackKm: .695, lane: 1.24, size: .42 },
+      { key: 'natureHydrangea', trackKm: .678, lane: -1.25, size: .38 },
       { key: 'coralHouse', trackKm: .74, lane: 1.48, size: .34 }, { key: 'natureMaple', trackKm: .785, lane: -1.29, size: .67 },
+      { key: 'natureGrass', trackKm: .765, lane: 1.24, size: .41 },
       { key: 'natureFlowers', trackKm: .825, lane: 1.24, size: .38 }, { key: 'naturePine', trackKm: .865, lane: -1.29, size: .67 },
+      { key: 'natureFlowerBunch', trackKm: .847, lane: 1.25, size: .35 },
       { key: 'natureHydrangea', trackKm: .905, lane: 1.25, size: .44 }, { key: 'natureRocks', trackKm: .95, lane: -1.24, size: .38 },
+      { key: 'natureShrubs', trackKm: .928, lane: -1.25, size: .41 },
       { key: 'natureGrass', trackKm: .985, lane: 1.24, size: .46 }
     ];
     this.natureProps = sceneryLayout.map(prop => ({ ...prop, object: this.add.image(0, 0, prop.key).setOrigin(.5, 1) }));
