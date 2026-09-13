@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#071d32" />
+    <meta name="description" content="A Bluetooth-powered indoor cycling game." />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <title>Suburban Sprint</title>
+    <link rel="stylesheet" href="./src/style.css" />
+    <script type="importmap">
+      { "imports": { "phaser": "./vendor/phaser.esm.min.js" } }
+    </script>
+  </head>
+  <body>
+    <main id="app">
+      <section class="topbar">
+        <div class="brand"><span>SUBURBAN</span> SPRINT <b>PROTOTYPE</b></div>
+        <div class="connections">
+          <select id="workout-select" aria-label="Mission"></select>
+          <button id="mission-button">Start 10-min mission</button>
+          <button id="pause-button" disabled>Pause</button>
+          <button id="trainer-button"><i></i><span>Connect trainer</span></button>
+          <button id="hr-button"><i></i><span>Connect heart rate</span></button>
+          <button id="erg-button" disabled><i></i><span>Enable ERG</span></button>
+          <button id="setup-button" aria-label="Open rider setup">Setup</button>
+        </div>
+      </section>
+      <section id="game-wrap"><div id="game"></div></section>
+      <section class="statusbar">
+        <span id="status">Demo rider active — connect a trainer whenever you’re ready.</span>
+        <span id="room-status">LOCAL PELOTON · SOLO</span>
+        <span class="support">Chrome or Edge · Bluetooth devices pair inside the game</span>
+      </section>
+    </main>
+    <aside id="setup-panel" class="setup-panel" hidden>
+      <div class="setup-card" role="dialog" aria-modal="true" aria-labelledby="setup-title">
+        <button id="setup-close" class="close-button" aria-label="Close setup">×</button>
+        <section>
+          <h2 id="setup-title">Rider setup</h2>
+          <p>Saved only in this browser.</p>
+          <label>Rider name <input id="profile-name" maxlength="24" /></label>
+          <div class="field-row">
+            <label>FTP (watts) <input id="profile-ftp" type="number" min="50" max="700" /></label>
+            <label>Weight (lb) <input id="profile-weight" type="number" min="70" max="500" /></label>
+          </div>
+          <label class="check"><input id="sound-toggle" type="checkbox" /> Mission sounds</label>
+          <label class="check"><input id="demo-toggle" type="checkbox" checked /> Demo rider</label>
+          <label class="check"><input id="ghost-toggle" type="checkbox" checked /> Race my best ghost</label>
+          <div class="setup-actions">
+            <button id="profile-save">Save profile</button>
+            <button id="fullscreen-button">Fullscreen</button>
+            <button id="install-button" hidden>Install game</button>
+          </div>
+        </section>
+        <section>
+          <h2>Recent rides</h2>
+          <div id="ride-history" class="ride-history"></div>
+        </section>
+      </div>
+    </aside>
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
