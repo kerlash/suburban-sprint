@@ -49,6 +49,7 @@ class RideScene extends Phaser.Scene {
   private baseRiderScale = 1; private backdropScale = 1; private cameraGap = 0; private powerFollower = hub.data.power;
   private phaseNumber = -1; private lastCountdown = -1; private sentTarget = -1;
   private powerTrace: number[] = []; private ghostTrace: number[] = []; private ghostZ = .24;
+  private slowRiderDistance = .18;
   private peers: PelotonPeer[] = []; private remoteRiders = new Map<string, Phaser.GameObjects.Image>(); private lastPelotonSend = 0;
 
   constructor() { super('ride'); }
@@ -78,7 +79,7 @@ class RideScene extends Phaser.Scene {
   }
   public startMission() {
     this.results?.destroy(true); this.results = undefined; this.running = true; this.paused = false; this.complete = false; this.elapsed = 0; this.distance = 0;
-    this.onTarget = 0; this.sampleTime = 0; this.powerSum = 0; this.cadenceSum = 0; this.hrSum = 0; this.hrTime = 0; this.maxPower = 0; this.busZ = .20; this.cameraGap = 0; this.powerFollower = this.telemetry.power; this.phaseNumber = -1; this.lastCountdown = -1; this.sentTarget = -1; this.powerTrace = []; this.ghostZ = .24;
+    this.onTarget = 0; this.sampleTime = 0; this.powerSum = 0; this.cadenceSum = 0; this.hrSum = 0; this.hrTime = 0; this.maxPower = 0; this.busZ = .20; this.cameraGap = 0; this.powerFollower = this.telemetry.power; this.phaseNumber = -1; this.lastCountdown = -1; this.sentTarget = -1; this.powerTrace = []; this.ghostZ = .24; this.slowRiderDistance = .18;
     const best = loadHistory().filter(ride => ride.workoutId === activeWorkout.id && ride.powerTrace?.length).sort((a, b) => b.onTargetPercent - a.onTargetPercent)[0];
     this.ghostTrace = best?.powerTrace || []; this.ghost.setVisible(ghostEnabled && this.ghostTrace.length > 0); this.bus.setVisible(true);
     missionAudio.cue('start');
@@ -187,14 +188,15 @@ class RideScene extends Phaser.Scene {
     this.minimap = this.add.graphics().setDepth(12);
   }
   private drawMinimap() {
-    const { width, height } = this.scale, mapW = 142, mapH = 82, x = width - mapW - 22, y = height - mapH - 54;
+    const { width, height } = this.scale, mapW = 213, mapH = 123, x = width - mapW - 22, y = height - mapH - 54;
     this.minimap.clear();
     this.minimap.fillStyle(0x092f4a, .92).fillRoundedRect(x, y, mapW, mapH, 10).lineStyle(2, 0x2c6d8e, 1).strokeRoundedRect(x, y, mapW, mapH, 10);
     this.minimap.lineStyle(5, 0xffcf32, .8).strokeEllipse(x + mapW / 2, y + mapH / 2 + 5, mapW - 30, mapH - 30);
     this.minimap.lineStyle(2, 0x7bb6c8, .9).strokeEllipse(x + mapW / 2, y + mapH / 2 + 5, mapW - 45, mapH - 45);
     const dot = (distanceKm: number, color: number, radius: number) => { const t = ((distanceKm % LAP_KM) + LAP_KM) % LAP_KM / LAP_KM, angle = t * Math.PI * 2 - Math.PI / 2, rx = (mapW - 30) / 2, ry = (mapH - 30) / 2; this.minimap.fillStyle(color, 1).fillCircle(x + mapW / 2 + Math.cos(angle) * rx, y + mapH / 2 + 5 + Math.sin(angle) * ry, radius); };
-    this.peers.slice(0, 5).forEach(peer => dot(peer.distanceKm, 0x8edbff, 3));
-    dot(this.distance, 0xff5c58, 4);
+    dot(this.slowRiderDistance, 0xffcf32, 4);
+    this.peers.slice(0, 5).forEach(peer => dot(peer.distanceKm, 0x8edbff, 4));
+    dot(this.distance, 0xff5c58, 5);
   }
   private project(z: number, lane = 0) {
     const { width, height } = this.scale, d = Math.pow(Phaser.Math.Clamp(z, 0, 1), 1.7), half = width * (.15 + d * .52), bend = -.032 + Math.sin((this.worldDistance % LAP_KM) / LAP_KM * Math.PI * 2) * .017;
@@ -285,12 +287,14 @@ class RideScene extends Phaser.Scene {
     this.props.forEach((p, i) => { p.z += this.speed * dt * .025; if (p.z > 1.04) { p.z -= 1; p.lane = i % 2 ? 1.06 : -1.06; } const pos = this.project(p.z, p.lane); p.object.setPosition(pos.x, pos.y).setScale(pos.scale * .82).setDepth(1.5 + p.z * 2.2).setAlpha(Phaser.Math.Clamp(p.z * 5, 0, 1)); });
     const bus = this.project(this.busZ, .18); this.bus.setPosition(bus.x, bus.y).setScale(bus.scale); [{ z: .27, lane: -.08 }, { z: .20, lane: .34 }].forEach((d, i) => { const pos = this.project(d.z, d.lane); this.rivals[i].setPosition(pos.x, pos.y).setOrigin(.5, 1).setScale(pos.scale * .29).setDepth(3); });
     if (this.ghost.visible) { const ghost = this.project(this.ghostZ, -.34); this.ghost.setPosition(ghost.x, ghost.y).setOrigin(.5, 1).setScale(ghost.scale * .29); }
+    this.slowRiderDistance += this.running && !this.paused ? dt * .0055 : 0;
+    [{ distanceKm: this.slowRiderDistance, lane: .30 }, { distanceKm: this.slowRiderDistance + .34, lane: -.08 }].forEach((rival, i) => { const z = Phaser.Math.Clamp(.23 + (this.distance - rival.distanceKm) * 2.3, .08, .48), pos = this.project(z, rival.lane); this.rivals[i].setPosition(pos.x, pos.y).setOrigin(.5, 1).setScale(pos.scale * .29).setDepth(3); });
     this.peers.forEach((peer, index) => { const z = Phaser.Math.Clamp(.23 + (this.distance - peer.distanceKm) * 2.3, .08, .48), pos = this.project(z, -.22 + index * .15); this.remoteRiders.get(peer.id)?.setPosition(pos.x, pos.y).setOrigin(.5, 1).setScale(pos.scale * .29); });
     if (time - this.lastPelotonSend > 250) { this.lastPelotonSend = time; peloton.publish(profile.name, activeWorkout.id, power, this.distance); }
     const orbit = this.worldDistance / LAP_KM * Math.PI * 2;
     this.backdrop.setPosition(this.scale.width / 2 + Math.sin(orbit) * this.scale.width * .028, this.scale.height / 2 + Math.cos(orbit) * this.scale.height * .006);
     this.backdrop.setScale(this.backdropScale * (1 + Math.sin(orbit * .5) * .004));
-    this.drawLines(); this.drawMinimap(); this.watts.setText(`${Math.round(power)} W`); this.cadence.setText(`${Math.round(this.telemetry.cadence)} RPM`); this.hr.setText(this.telemetry.heartRate ? `${Math.round(this.telemetry.heartRate)} BPM` : '—'); this.speedText.setText(`${(this.speed * 3.6).toFixed(1)} KPH`); this.lap.setText(`LAP ${Math.floor(this.distance / LAP_KM) + 1}  ·  ${this.distance.toFixed(2)} KM  ·  ${this.clock(totalSeconds - this.elapsed)}`);
+    this.drawLines(); this.drawMinimap(); const weightKg = Math.max(1, profile.weightLb * .453592), wkg = power / weightKg; this.watts.setText(`${Math.round(power)} W\n${wkg.toFixed(2)} W/KG`).setFontSize(23); this.cadence.setText(`${Math.round(this.telemetry.cadence)} RPM`); this.hr.setText(this.telemetry.heartRate ? `${Math.round(this.telemetry.heartRate)} BPM` : '—'); this.speedText.setText(`${(this.speed * 3.6).toFixed(1)} KPH`); this.lap.setText(`LAP ${Math.floor(this.distance / LAP_KM) + 1}  ·  ${this.distance.toFixed(2)} KM  ·  ${this.clock(totalSeconds - this.elapsed)}`);
   }
 }
 
@@ -345,7 +349,7 @@ workoutSelect.addEventListener('change', () => {
 });
 trainer.addEventListener('click', async () => { try { status.textContent = 'Choose your trainer in the Bluetooth window…'; const name = await hub.connectTrainer(); trainer.classList.add('connected'); trainer.querySelector('span')!.textContent = name; demo.checked = false; erg.disabled = !hub.trainerControlAvailable; status.textContent = hub.trainerControlAvailable ? `${name} connected. ERG control is available but remains off.` : `${name} connected for power and cadence; ERG control is unavailable.`; } catch (e) { status.textContent = e instanceof Error ? e.message : String(e); } });
 hr.addEventListener('click', async () => { try { status.textContent = 'Choose your Polar or COROS heart-rate sensor…'; const name = await hub.connectHeartRate(); hr.classList.add('connected'); hr.querySelector('span')!.textContent = name; status.textContent = `Receiving heart rate from ${name}.`; } catch (e) { status.textContent = e instanceof Error ? e.message : String(e); } });
-erg.addEventListener('click', async () => { try { if (hub.controlEnabled) { await hub.disableTrainerControl(); erg.classList.remove('connected'); erg.querySelector('span')!.textContent = 'Enable ERG'; } else { status.textContent = 'Requesting trainer control…'; await hub.enableTrainerControl(); erg.classList.add('connected'); erg.querySelector('span')!.textContent = 'Release ERG'; scene().syncTrainerTarget(); } } catch (e) { status.textContent = e instanceof Error ? e.message : String(e); } });
+erg.addEventListener('click', async () => { try { if (hub.controlEnabled) { await hub.disableTrainerControl(); erg.classList.remove('connected'); erg.querySelector('span')!.textContent = 'Enable ERG'; status.textContent = 'ERG off — reading bike power only. Trainer reset requested.'; } else { status.textContent = 'Requesting trainer control…'; await hub.enableTrainerControl(); erg.classList.add('connected'); erg.querySelector('span')!.textContent = 'Release ERG'; scene().syncTrainerTarget(); status.textContent = 'ERG on — mission controls target watts; you supply the effort.'; } } catch (e) { status.textContent = e instanceof Error ? e.message : String(e); } });
 mission.addEventListener('click', () => { void missionAudio.unlock(); scene().startMission(); mission.textContent = 'Restart mission'; pauseButton.disabled = false; pauseButton.textContent = 'Pause'; endWorkoutButton.hidden = true; status.textContent = `${activeWorkout.name} running — ${Math.round(totalSeconds / 60)} min, FTP ${profile.ftp} W${hub.controlEnabled ? ', ERG on' : ''}.`; });
 pauseButton.addEventListener('click', async () => { const paused = scene().togglePause(); pauseButton.textContent = paused ? 'Resume' : 'Pause'; endWorkoutButton.hidden = !paused; if (paused && hub.controlEnabled) { await hub.disableTrainerControl(); erg.classList.remove('connected'); erg.querySelector('span')!.textContent = 'Enable ERG'; } status.textContent = paused ? 'Mission paused. ERG released; trainer telemetry remains connected. End workout is ready.' : `${activeWorkout.name} resumed.`; });
 endWorkoutButton.addEventListener('click', () => { if (!scene().endWorkout()) return; endWorkoutButton.hidden = true; pauseButton.disabled = true; pauseButton.textContent = 'Pause'; status.textContent = 'Workout ended. Your partial-ride summary is shown on the course.'; renderHistory(); });
