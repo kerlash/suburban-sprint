@@ -45,6 +45,8 @@ export class SensorHub extends EventTarget {
   demoEnabled = true;
   private demoStartedAt = performance.now();
   private controlPoint?: GattCharacteristicLike;
+  private controlNotifications = false;
+  private controlTail: Promise<void> = Promise.resolve();
   private controlPending?: { opcode: number; resolve: () => void; reject: (error: Error) => void; timer: number };
   controlEnabled = false;
 
@@ -97,6 +99,7 @@ export class SensorHub extends EventTarget {
       this.data.power = 0;
       this.data.cadence = 0;
       this.controlPoint = undefined;
+      this.controlNotifications = false;
       this.controlEnabled = false;
       this.changed();
     });
@@ -108,6 +111,7 @@ export class SensorHub extends EventTarget {
     if (!point) throw new Error('This trainer did not advertise FTMS power control. Telemetry still works normally.');
     await point.startNotifications();
     point.addEventListener('characteristicvaluechanged', this.onControlResponse);
+    this.controlNotifications = true;
     await this.controlCommand(new Uint8Array([0x00]));
     this.controlEnabled = true;
     this.dispatchEvent(new CustomEvent('controlstatus', { detail: 'ERG control enabled.' }));
@@ -115,7 +119,7 @@ export class SensorHub extends EventTarget {
 
   async disableTrainerControl() {
     const wasEnabled = this.controlEnabled;
-    if (this.controlEnabled) {
+    if (this.controlNotifications) {
       try { await this.controlCommand(new Uint8Array([0x01])); }
       catch { /* Releasing local control still prevents further targets if reset is unsupported. */ }
     }
@@ -144,6 +148,12 @@ export class SensorHub extends EventTarget {
   };
 
   private controlCommand(bytes: Uint8Array) {
+    const queued = this.controlTail.catch(() => undefined).then(() => this.issueControlCommand(bytes));
+    this.controlTail = queued;
+    return queued;
+  }
+
+  private issueControlCommand(bytes: Uint8Array) {
     const point = this.controlPoint;
     if (!point) return Promise.reject(new Error('Trainer control is unavailable.'));
     if (this.controlPending) return Promise.reject(new Error('Trainer control command already in progress.'));
