@@ -41,7 +41,7 @@ class RideScene extends Phaser.Scene {
   private rider!: Phaser.GameObjects.Sprite; private shadow!: Phaser.GameObjects.Ellipse; private bus!: Phaser.GameObjects.Container;
   private rivals: Phaser.GameObjects.Image[] = []; private rivalLabels: Phaser.GameObjects.Text[] = []; private ghost!: Phaser.GameObjects.Image; private props: Array<{ object: Phaser.GameObjects.Container; z: number; lane: number }> = [];
   private midProps: Array<{ object: Phaser.GameObjects.Container; z: number; lane: number }> = [];
-  private natureProps: Array<{ object: Phaser.GameObjects.Image; z: number; lane: number; size: number }> = [];
+  private natureProps: Array<{ object: Phaser.GameObjects.Image; trackKm: number; lane: number; size: number }> = [];
   private clouds: Array<{ object: Phaser.GameObjects.Container; homeX: number; speed: number }> = [];
   private watts!: Phaser.GameObjects.Text; private wattsPerKg!: Phaser.GameObjects.Text; private cadence!: Phaser.GameObjects.Text; private hr!: Phaser.GameObjects.Text; private speedText!: Phaser.GameObjects.Text;
   private title!: Phaser.GameObjects.Text; private story!: Phaser.GameObjects.Text; private target!: Phaser.GameObjects.Text; private feedback!: Phaser.GameObjects.Text; private lap!: Phaser.GameObjects.Text;
@@ -63,17 +63,31 @@ class RideScene extends Phaser.Scene {
     this.load.image('natureGrass', './assets/nature-grass-clover.png'); this.load.image('natureOak', './assets/nature-oak-tree.png');
     this.load.image('natureRocks', './assets/nature-rocks-moss.png'); this.load.image('natureShrubs', './assets/nature-berry-shrubs.png');
     this.load.image('natureFlowers', './assets/nature-wildflowers.png'); this.load.image('naturePine', './assets/nature-pine-tree.png');
+    this.load.image('natureMaple', './assets/nature-maple-tree.png'); this.load.image('natureBirch', './assets/nature-birch-cluster.png');
+    this.load.image('natureOrnamental', './assets/nature-ornamental-grass.png'); this.load.image('natureFlowerBunch', './assets/nature-flower-bunch.png');
+    this.load.image('natureHydrangea', './assets/nature-hydrangea-bush.png'); this.load.image('yellowHouse', './assets/landmark-yellow-house.png'); this.load.image('coralHouse', './assets/landmark-coral-house.png');
   }
   create() {
     this.keyRider(); this.keyPedalCycle(); const { width, height } = this.scale;
     this.surface = this.add.graphics().setDepth(0); this.drawTrackSurface();
     this.lines = this.add.graphics().setDepth(1);
     this.clouds = Array.from({ length: 5 }, (_, i) => ({ object: this.makeCloud(i), homeX: width * (i + .25) / 4.5, speed: .09 + i % 3 * .025 }));
-    const nature = [
-      { key: 'natureGrass', size: .48 }, { key: 'natureRocks', size: .40 }, { key: 'natureShrubs', size: .55 },
-      { key: 'natureFlowers', size: .42 }, { key: 'natureOak', size: .92 }, { key: 'naturePine', size: .82 }
+    const sceneryLayout = [
+      { key: 'natureGrass', trackKm: .02, lane: -1.24, size: .46 }, { key: 'natureRocks', trackKm: .055, lane: 1.24, size: .38 },
+      { key: 'natureOak', trackKm: .095, lane: -1.29, size: .72 }, { key: 'natureShrubs', trackKm: .135, lane: 1.25, size: .48 },
+      { key: 'natureBirch', trackKm: .175, lane: -1.28, size: .65 }, { key: 'natureFlowers', trackKm: .215, lane: 1.24, size: .38 },
+      { key: 'yellowHouse', trackKm: .25, lane: -1.48, size: .34 }, { key: 'natureMaple', trackKm: .295, lane: 1.29, size: .67 },
+      { key: 'natureOrnamental', trackKm: .335, lane: -1.24, size: .42 }, { key: 'natureHydrangea', trackKm: .375, lane: 1.25, size: .44 },
+      { key: 'naturePine', trackKm: .415, lane: -1.29, size: .67 }, { key: 'natureRocks', trackKm: .455, lane: 1.24, size: .38 },
+      { key: 'natureGrass', trackKm: .495, lane: -1.24, size: .46 }, { key: 'natureFlowerBunch', trackKm: .535, lane: 1.24, size: .42 },
+      { key: 'natureOak', trackKm: .575, lane: -1.29, size: .72 }, { key: 'natureShrubs', trackKm: .615, lane: 1.25, size: .48 },
+      { key: 'natureBirch', trackKm: .655, lane: -1.28, size: .65 }, { key: 'natureOrnamental', trackKm: .695, lane: 1.24, size: .42 },
+      { key: 'coralHouse', trackKm: .74, lane: 1.48, size: .34 }, { key: 'natureMaple', trackKm: .785, lane: -1.29, size: .67 },
+      { key: 'natureFlowers', trackKm: .825, lane: 1.24, size: .38 }, { key: 'naturePine', trackKm: .865, lane: -1.29, size: .67 },
+      { key: 'natureHydrangea', trackKm: .905, lane: 1.25, size: .44 }, { key: 'natureRocks', trackKm: .95, lane: -1.24, size: .38 },
+      { key: 'natureGrass', trackKm: .985, lane: 1.24, size: .46 }
     ];
-    this.natureProps = Array.from({ length: 20 }, (_, i) => { const pick = nature[i % nature.length]; return { object: this.add.image(0, 0, pick.key).setOrigin(.5, 1), z: (i + 1) / 21, lane: i % 2 ? 1.23 : -1.23, size: pick.size }; });
+    this.natureProps = sceneryLayout.map(prop => ({ ...prop, object: this.add.image(0, 0, prop.key).setOrigin(.5, 1) }));
     this.bus = this.makeBus();
     this.rivals = [this.add.image(0, 0, 'rider').setTint(0xc99cff), this.add.image(0, 0, 'rider').setTint(0xbef56f)];
     this.rivalLabels = this.npcRiders.map(npc => this.add.text(0, 0, `${npc.wattsPerKg.toFixed(1)} W/KG`, { fontFamily: 'Inter', fontSize: 10, color: '#ffffff', fontStyle: 'bold', backgroundColor: '#092f4add', padding: { x: 5, y: 3 } }).setOrigin(.5, 1).setDepth(4));
@@ -222,7 +236,7 @@ class RideScene extends Phaser.Scene {
   private courseTurn(distanceKm: number) {
     const t = ((distanceKm % LAP_KM) + LAP_KM) % LAP_KM / LAP_KM;
     if (t >= .22 && t < .50) return Math.sin((t - .22) / .28 * Math.PI);
-    if (t >= .72) return -Math.sin((t - .72) / .28 * Math.PI);
+    if (t >= .72) return Math.sin((t - .72) / .28 * Math.PI);
     return 0;
   }
   private drawTrackSurface() {
@@ -329,7 +343,8 @@ class RideScene extends Phaser.Scene {
       const travelX = this.worldDistance * 1000 * cloud.speed + time * .0025 * (i % 2 ? 1 : .7);
       cloud.object.x = Phaser.Math.Wrap(cloud.homeX - travelX, -160, span - 160);
     });
-    this.natureProps.forEach((p, i) => { p.z += this.speed * dt * .021; if (p.z > 1.04) { p.z -= 1; p.lane = i % 2 ? 1.23 : -1.23; } const pos = this.project(p.z, p.lane); p.object.setPosition(pos.x, pos.y).setScale(pos.scale * p.size).setDepth(1.35 + p.z * 2.1).setAlpha(Phaser.Math.Clamp(p.z * 5, 0, 1)); });
+    const courseDistance = this.currentTrackDistance();
+    this.natureProps.forEach(p => { const relative = Phaser.Math.Wrap(p.trackKm - courseDistance + LAP_KM / 2, 0, LAP_KM) - LAP_KM / 2, visible = relative >= -.018 && relative <= .20, z = Phaser.Math.Clamp(.98 - relative * 4.65, .05, 1.04), pos = this.project(z, p.lane); p.object.setVisible(visible).setPosition(pos.x, pos.y).setScale(pos.scale * p.size).setDepth(1.35 + z * 2.1).setAlpha(Phaser.Math.Clamp(z * 5, 0, 1)); });
     const bus = this.project(this.busZ, .18); this.bus.setPosition(bus.x, bus.y).setScale(bus.scale); [{ z: .27, lane: -.08 }, { z: .20, lane: .34 }].forEach((d, i) => { const pos = this.project(d.z, d.lane); this.rivals[i].setPosition(pos.x, pos.y).setOrigin(.5, 1).setScale(pos.scale * .29).setDepth(3); });
     if (this.ghost.visible) { const ghost = this.project(this.ghostZ, -.34); this.ghost.setPosition(ghost.x, ghost.y).setOrigin(.5, 1).setScale(ghost.scale * .29); }
     if (!this.paused && !this.complete) { this.npcRiders[0].distanceKm += dt * .0055; this.npcRiders[1].distanceKm += dt * .0078; }
