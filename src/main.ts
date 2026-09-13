@@ -97,7 +97,13 @@ class RideScene extends Phaser.Scene {
     this.feedback.setText(this.paused ? 'MISSION PAUSED' : 'BACK TO WORK').setColor(this.paused ? '#ffffff' : '#6ff0a0');
     return this.paused;
   }
+  public endWorkout() {
+    if (!this.running || !this.paused) return false;
+    this.finish();
+    return true;
+  }
   public get isRunning() { return this.running; }
+  public get isPaused() { return this.paused; }
   public syncTrainerTarget() {
     if (!this.running || !hub.controlEnabled) return;
     const goal = Math.round(profile.ftp * this.activePhase().phase.pct); this.sentTarget = goal;
@@ -197,15 +203,15 @@ class RideScene extends Phaser.Scene {
     let at = 0; for (const phase of phases.slice(0, -1)) { at += phase.seconds; this.lines.fillStyle(0xffffff, .7).fillRect(x + bar * at / totalSeconds - 1, y - 4, 2, 12); }
   }
   private finish() {
-    this.running = false; this.complete = true; this.elapsed = totalSeconds; this.bus.setVisible(false); const { width, height } = this.scale;
-    const avgP = this.sampleTime ? Math.round(this.powerSum / this.sampleTime) : 0, avgC = this.sampleTime ? Math.round(this.cadenceSum / this.sampleTime) : 0, avgH = this.hrTime ? Math.round(this.hrSum / this.hrTime) : 0, score = Math.round(this.onTarget / totalSeconds * 100);
+    this.running = false; this.complete = true; this.paused = false; this.bus.setVisible(false); const { width, height } = this.scale;
+    const avgP = this.sampleTime ? Math.round(this.powerSum / this.sampleTime) : 0, avgC = this.sampleTime ? Math.round(this.cadenceSum / this.sampleTime) : 0, avgH = this.hrTime ? Math.round(this.hrSum / this.hrTime) : 0, score = Math.round(this.onTarget / Math.max(1, this.sampleTime) * 100);
     const performance = calculatePerformanceMetrics(this.powerTrace, this.sampleTime, this.distance, profile.ftp);
     const avgSpeed = performance.averageSpeedKph.toFixed(1), percentFtp = Math.round(performance.percentFtp), trainingPoints = Math.round(performance.trainingPoints);
     missionAudio.cue('finish');
-    saveRide({ id: crypto.randomUUID(), completedAt: new Date().toISOString(), workoutId: activeWorkout.id, workoutName: activeWorkout.name, durationSeconds: totalSeconds, distanceKm: this.distance, averagePower: avgP, averageSpeedKph: performance.averageSpeedKph, percentFtp: performance.percentFtp, trainingPoints: performance.trainingPoints, normalizedPower: performance.normalizedPower, ftpWatts: profile.ftp, maxPower: Math.round(this.maxPower), averageCadence: avgC, averageHeartRate: avgH, onTargetPercent: score, powerTrace: this.powerTrace });
+    saveRide({ id: crypto.randomUUID(), completedAt: new Date().toISOString(), workoutId: activeWorkout.id, workoutName: activeWorkout.name, durationSeconds: Math.round(this.sampleTime), distanceKm: this.distance, averagePower: avgP, averageSpeedKph: performance.averageSpeedKph, percentFtp: performance.percentFtp, trainingPoints: performance.trainingPoints, normalizedPower: performance.normalizedPower, ftpWatts: profile.ftp, maxPower: Math.round(this.maxPower), averageCadence: avgC, averageHeartRate: avgH, onTargetPercent: score, powerTrace: this.powerTrace });
     const shade = this.add.rectangle(-width / 2, -height / 2, width, height, 0x03121e, .62).setOrigin(0), panel = this.add.rectangle(0, 0, Math.min(620, width - 40), Math.min(410, height - 40), 0x092f4a, .97).setStrokeStyle(4, 0xffcf32);
     const title = this.add.text(0, -150, 'MISSION COMPLETE', { fontFamily: 'Barlow Condensed', fontSize: 43, color: '#ffcf32', fontStyle: 'bold' }).setOrigin(.5), joke = this.add.text(0, -106, 'The bus has filed a formal complaint.', { fontFamily: 'Inter', fontSize: 14, color: '#b9d8e8' }).setOrigin(.5);
-    const stats = this.add.text(0, 10, `TRAINING POINTS (TP)  ${trainingPoints}    ·    AVG %FTP  ${percentFtp}%\nON TARGET  ${score}%    ·    AVG POWER  ${avgP} W    ·    MAX  ${Math.round(this.maxPower)} W\nAVG CADENCE  ${avgC} RPM    ·    AVG HR  ${avgH || '—'} BPM\nDISTANCE  ${this.distance.toFixed(2)} KM    ·    AVG SPEED  ${avgSpeed} KPH\nLAPS  ${(this.distance / LAP_KM).toFixed(1)}`, { fontFamily: 'Barlow Condensed', fontSize: 21, color: '#fff', fontStyle: 'bold', align: 'center', lineSpacing: 8 }).setOrigin(.5);
+    const rideDuration = this.clock(this.sampleTime), stats = this.add.text(0, 10, `TRAINING POINTS (TP)  ${trainingPoints}    ·    AVG %FTP  ${percentFtp}%\nON TARGET  ${score}%    ·    AVG POWER  ${avgP} W    ·    MAX  ${Math.round(this.maxPower)} W\nAVG CADENCE  ${avgC} RPM    ·    AVG HR  ${avgH || '—'} BPM\nDISTANCE  ${this.distance.toFixed(2)} KM    ·    AVG SPEED  ${avgSpeed} KPH\nRIDE TIME  ${rideDuration}    ·    LAPS  ${(this.distance / LAP_KM).toFixed(1)}`, { fontFamily: 'Barlow Condensed', fontSize: 21, color: '#fff', fontStyle: 'bold', align: 'center', lineSpacing: 8 }).setOrigin(.5);
     this.results = this.add.container(width / 2, height / 2, [shade, panel, title, joke, stats, this.add.text(0, 165, 'PRESS START AGAIN FOR ANOTHER RUN', { fontFamily: 'Inter', fontSize: 11, color: '#6ff0a0', fontStyle: 'bold' }).setOrigin(.5)]).setDepth(30);
   }
   update(time: number, deltaMs: number) {
@@ -233,16 +239,16 @@ class RideScene extends Phaser.Scene {
       else if (power < goal * .9) this.feedback.setText(`PUSH  +${Math.max(1, Math.round(goal - power))} W`).setColor('#ffcf32'); else if (power > goal * 1.1) this.feedback.setText(`EASE  ${Math.round(power - goal)} W`).setColor('#ff8a75'); else if (!cadenceOk) this.feedback.setText(`QUICKER FEET  ${phase.cadence}+ RPM`).setColor('#65e2da'); else this.feedback.setText('RIGHT ON TARGET').setColor('#6ff0a0');
       if (this.elapsed >= totalSeconds) this.finish();
     } else if (this.complete) { this.title.setText('⚑  MISSION COMPLETE'); this.story.setText('The bus has been caught. Its dignity has not recovered.'); this.target.setText(`FTP ${profile.ftp} W  ·  ${this.distance.toFixed(2)} KM  ·  ${(this.distance / LAP_KM).toFixed(1)} LAPS`); this.feedback.setText('RIDE COMPLETE').setColor('#6ff0a0'); }
-    const steer = (this.cursors?.left.isDown ? -1 : 0) + (this.cursors?.right.isDown ? 1 : 0), bob = Math.sin(time * .011 * Math.max(.5, this.telemetry.cadence / 85));
+    const steer = (this.cursors?.left.isDown ? -1 : 0) + (this.cursors?.right.isDown ? 1 : 0), bob = Math.sin(time * .011 * Math.max(.5, this.telemetry.cadence / 85)), standing = power > Math.max(120, profile.ftp * .82) && this.telemetry.cadence > 0 && this.telemetry.cadence < 72;
     this.powerFollower += (power - this.powerFollower) * (1 - Math.exp(-dt * .7));
     const surge = Phaser.Math.Clamp((power - this.powerFollower) / 85, 0, 1);
     const gapTarget = surge * this.scale.height * .028;
     this.cameraGap += (gapTarget - this.cameraGap) * (1 - Math.exp(-dt * (gapTarget > this.cameraGap ? 5 : 1.8)));
     const cameraScale = 1 - this.cameraGap / this.scale.height * 1.25;
-    this.rider.x = Phaser.Math.Linear(this.rider.x, this.scale.width * .53 + steer * this.scale.width * .075, .08);
-    this.rider.y = this.scale.height * .93 - this.cameraGap + bob * .65;
-    this.rider.setScale(this.baseRiderScale * cameraScale);
-    this.rider.rotation = steer * .045 + Math.sin(time * .004) * .002;
+    this.rider.x = Phaser.Math.Linear(this.rider.x, this.scale.width * .53 + steer * this.scale.width * .075 + (standing ? Math.sin(time * .006) * this.scale.width * .006 : 0), .08);
+    this.rider.y = this.scale.height * .93 - this.cameraGap + bob * (standing ? 1.25 : .65) - (standing ? 2 : 0);
+    this.rider.setScale(this.baseRiderScale * cameraScale * (standing ? 1.015 : 1));
+    this.rider.rotation = steer * .045 + Math.sin(time * .004) * .002 + (standing ? Math.sin(time * .007) * .012 : 0);
     if (this.telemetry.cadence < 5) {
       if (!this.rider.anims.isPaused) this.rider.anims.pause();
     } else {
@@ -280,6 +286,7 @@ const trainer = document.querySelector('#trainer-button') as HTMLButtonElement;
 const hr = document.querySelector('#hr-button') as HTMLButtonElement;
 const mission = document.querySelector('#mission-button') as HTMLButtonElement;
 const pauseButton = document.querySelector('#pause-button') as HTMLButtonElement;
+const endWorkoutButton = document.querySelector('#end-workout-button') as HTMLButtonElement;
 const erg = document.querySelector('#erg-button') as HTMLButtonElement;
 const workoutSelect = document.querySelector('#workout-select') as HTMLSelectElement;
 const setupButton = document.querySelector('#setup-button') as HTMLButtonElement;
@@ -324,8 +331,9 @@ workoutSelect.addEventListener('change', () => {
 trainer.addEventListener('click', async () => { try { status.textContent = 'Choose your trainer in the Bluetooth window…'; const name = await hub.connectTrainer(); trainer.classList.add('connected'); trainer.querySelector('span')!.textContent = name; demo.checked = false; erg.disabled = !hub.trainerControlAvailable; status.textContent = hub.trainerControlAvailable ? `${name} connected. ERG control is available but remains off.` : `${name} connected for power and cadence; ERG control is unavailable.`; } catch (e) { status.textContent = e instanceof Error ? e.message : String(e); } });
 hr.addEventListener('click', async () => { try { status.textContent = 'Choose your Polar or COROS heart-rate sensor…'; const name = await hub.connectHeartRate(); hr.classList.add('connected'); hr.querySelector('span')!.textContent = name; status.textContent = `Receiving heart rate from ${name}.`; } catch (e) { status.textContent = e instanceof Error ? e.message : String(e); } });
 erg.addEventListener('click', async () => { try { if (hub.controlEnabled) { await hub.disableTrainerControl(); erg.classList.remove('connected'); erg.querySelector('span')!.textContent = 'Enable ERG'; } else { status.textContent = 'Requesting trainer control…'; await hub.enableTrainerControl(); erg.classList.add('connected'); erg.querySelector('span')!.textContent = 'Release ERG'; scene().syncTrainerTarget(); } } catch (e) { status.textContent = e instanceof Error ? e.message : String(e); } });
-mission.addEventListener('click', () => { void missionAudio.unlock(); scene().startMission(); mission.textContent = 'Restart mission'; pauseButton.disabled = false; pauseButton.textContent = 'Pause'; status.textContent = `${activeWorkout.name} running — ${Math.round(totalSeconds / 60)} min, FTP ${profile.ftp} W${hub.controlEnabled ? ', ERG on' : ''}.`; });
-pauseButton.addEventListener('click', async () => { const paused = scene().togglePause(); pauseButton.textContent = paused ? 'Resume' : 'Pause'; if (paused && hub.controlEnabled) { await hub.disableTrainerControl(); erg.classList.remove('connected'); erg.querySelector('span')!.textContent = 'Enable ERG'; } status.textContent = paused ? 'Mission paused. ERG released; trainer telemetry remains connected.' : `${activeWorkout.name} resumed.`; });
+mission.addEventListener('click', () => { void missionAudio.unlock(); scene().startMission(); mission.textContent = 'Restart mission'; pauseButton.disabled = false; pauseButton.textContent = 'Pause'; endWorkoutButton.hidden = true; status.textContent = `${activeWorkout.name} running — ${Math.round(totalSeconds / 60)} min, FTP ${profile.ftp} W${hub.controlEnabled ? ', ERG on' : ''}.`; });
+pauseButton.addEventListener('click', async () => { const paused = scene().togglePause(); pauseButton.textContent = paused ? 'Resume' : 'Pause'; endWorkoutButton.hidden = !paused; if (paused && hub.controlEnabled) { await hub.disableTrainerControl(); erg.classList.remove('connected'); erg.querySelector('span')!.textContent = 'Enable ERG'; } status.textContent = paused ? 'Mission paused. ERG released; trainer telemetry remains connected. End workout is ready.' : `${activeWorkout.name} resumed.`; });
+endWorkoutButton.addEventListener('click', () => { if (!scene().endWorkout()) return; endWorkoutButton.hidden = true; pauseButton.disabled = true; pauseButton.textContent = 'Pause'; status.textContent = 'Workout ended. Your partial-ride summary is shown on the course.'; renderHistory(); });
 demo.addEventListener('change', () => { hub.demoEnabled = demo.checked; status.textContent = hub.demoEnabled ? 'Demo rider active — start when ready.' : 'Demo paused. Connect your devices to ride.'; });
 ghostToggle.addEventListener('change', () => { ghostEnabled = ghostToggle.checked; status.textContent = ghostEnabled ? 'Best-ride ghost enabled when a matching completed mission exists.' : 'Ghost rider hidden.'; });
 setupButton.addEventListener('click', () => { setupPanel.hidden = false; renderHistory(); profileName.focus(); });
