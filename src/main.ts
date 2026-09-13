@@ -9,7 +9,7 @@ let activeWorkout: Workout = WORKOUTS[0];
 let phases = activeWorkout.phases;
 let totalSeconds = workoutSeconds(activeWorkout);
 let ghostEnabled = true;
-const LAP_KM = .25;
+const LAP_KM = 1;
 
 class MissionAudio {
   private context?: AudioContext;
@@ -37,6 +37,7 @@ class RideScene extends Phaser.Scene {
   private running = false; private paused = false; private complete = false; private onTarget = 0; private sampleTime = 0;
   private powerSum = 0; private cadenceSum = 0; private hrSum = 0; private hrTime = 0; private maxPower = 0;
   private backdrop!: Phaser.GameObjects.Image; private lines!: Phaser.GameObjects.Graphics;
+  private minimap!: Phaser.GameObjects.Graphics;
   private rider!: Phaser.GameObjects.Sprite; private shadow!: Phaser.GameObjects.Ellipse; private bus!: Phaser.GameObjects.Container;
   private rivals: Phaser.GameObjects.Image[] = []; private ghost!: Phaser.GameObjects.Image; private props: Array<{ object: Phaser.GameObjects.Container; z: number; lane: number }> = [];
   private midProps: Array<{ object: Phaser.GameObjects.Container; z: number; lane: number }> = [];
@@ -183,6 +184,17 @@ class RideScene extends Phaser.Scene {
     this.feedback = this.add.text(width / 2, height - 58, 'START WHEN READY', { fontFamily: 'Barlow Condensed', fontSize: 20, color: '#fff', fontStyle: 'bold', backgroundColor: '#092f4add', padding: { x: 12, y: 5 } }).setOrigin(.5).setDepth(12);
     this.stance = this.add.text(width / 2, height - 92, 'OUT OF SADDLE', { fontFamily: 'Barlow Condensed', fontSize: 18, color: '#ffcf32', fontStyle: 'bold', backgroundColor: '#092f4add', padding: { x: 10, y: 4 } }).setOrigin(.5).setDepth(12).setVisible(false);
     this.lap = this.add.text(width - 25, height - 43, 'LAP 1  ·  0.00 KM', { fontFamily: 'Inter', fontSize: 11, color: '#fff', fontStyle: 'bold' }).setOrigin(1, 0).setDepth(12);
+    this.minimap = this.add.graphics().setDepth(12);
+  }
+  private drawMinimap() {
+    const { width, height } = this.scale, mapW = 142, mapH = 82, x = width - mapW - 22, y = height - mapH - 54;
+    this.minimap.clear();
+    this.minimap.fillStyle(0x092f4a, .92).fillRoundedRect(x, y, mapW, mapH, 10).lineStyle(2, 0x2c6d8e, 1).strokeRoundedRect(x, y, mapW, mapH, 10);
+    this.minimap.lineStyle(5, 0xffcf32, .8).strokeEllipse(x + mapW / 2, y + mapH / 2 + 5, mapW - 30, mapH - 30);
+    this.minimap.lineStyle(2, 0x7bb6c8, .9).strokeEllipse(x + mapW / 2, y + mapH / 2 + 5, mapW - 45, mapH - 45);
+    const dot = (distanceKm: number, color: number, radius: number) => { const t = ((distanceKm % LAP_KM) + LAP_KM) % LAP_KM / LAP_KM, angle = t * Math.PI * 2 - Math.PI / 2, rx = (mapW - 30) / 2, ry = (mapH - 30) / 2; this.minimap.fillStyle(color, 1).fillCircle(x + mapW / 2 + Math.cos(angle) * rx, y + mapH / 2 + 5 + Math.sin(angle) * ry, radius); };
+    this.peers.slice(0, 5).forEach(peer => dot(peer.distanceKm, 0x8edbff, 3));
+    dot(this.distance, 0xff5c58, 4);
   }
   private project(z: number, lane = 0) {
     const { width, height } = this.scale, d = Math.pow(Phaser.Math.Clamp(z, 0, 1), 1.7), half = width * (.15 + d * .52), bend = -.032 + Math.sin((this.worldDistance % LAP_KM) / LAP_KM * Math.PI * 2) * .017;
@@ -271,14 +283,14 @@ class RideScene extends Phaser.Scene {
       p.object.setPosition(pos.x, pos.y).setScale(pos.scale * 1.55).setDepth(.55 + p.z).setAlpha(Phaser.Math.Clamp(p.z * 8, .18, .9));
     });
     this.props.forEach((p, i) => { p.z += this.speed * dt * .025; if (p.z > 1.04) { p.z -= 1; p.lane = i % 2 ? 1.06 : -1.06; } const pos = this.project(p.z, p.lane); p.object.setPosition(pos.x, pos.y).setScale(pos.scale * .82).setDepth(1.5 + p.z * 2.2).setAlpha(Phaser.Math.Clamp(p.z * 5, 0, 1)); });
-    const bus = this.project(this.busZ, .18); this.bus.setPosition(bus.x, bus.y).setScale(bus.scale); [{ z: .27, lane: -.08 }, { z: .20, lane: .34 }].forEach((d, i) => { const pos = this.project(d.z + Math.sin(time * .0008 + i) * .018, d.lane); this.rivals[i].setPosition(pos.x, pos.y + Math.sin(time * .009 + i * 2) * 1.5).setOrigin(.5, 1).setScale(pos.scale * .29).setDepth(3); });
+    const bus = this.project(this.busZ, .18); this.bus.setPosition(bus.x, bus.y).setScale(bus.scale); [{ z: .27, lane: -.08 }, { z: .20, lane: .34 }].forEach((d, i) => { const pos = this.project(d.z, d.lane); this.rivals[i].setPosition(pos.x, pos.y).setOrigin(.5, 1).setScale(pos.scale * .29).setDepth(3); });
     if (this.ghost.visible) { const ghost = this.project(this.ghostZ, -.34); this.ghost.setPosition(ghost.x, ghost.y).setOrigin(.5, 1).setScale(ghost.scale * .29); }
-    this.peers.forEach((peer, index) => { const z = Phaser.Math.Clamp(.23 + (this.distance - peer.distanceKm) * 1.8, .11, .40), pos = this.project(z, -.12 + index * .17); this.remoteRiders.get(peer.id)?.setPosition(pos.x, pos.y).setOrigin(.5, 1).setScale(pos.scale * .29); });
+    this.peers.forEach((peer, index) => { const z = Phaser.Math.Clamp(.23 + (this.distance - peer.distanceKm) * 2.3, .08, .48), pos = this.project(z, -.22 + index * .15); this.remoteRiders.get(peer.id)?.setPosition(pos.x, pos.y).setOrigin(.5, 1).setScale(pos.scale * .29); });
     if (time - this.lastPelotonSend > 250) { this.lastPelotonSend = time; peloton.publish(profile.name, activeWorkout.id, power, this.distance); }
     const orbit = this.worldDistance / LAP_KM * Math.PI * 2;
     this.backdrop.setPosition(this.scale.width / 2 + Math.sin(orbit) * this.scale.width * .028, this.scale.height / 2 + Math.cos(orbit) * this.scale.height * .006);
     this.backdrop.setScale(this.backdropScale * (1 + Math.sin(orbit * .5) * .004));
-    this.drawLines(); this.watts.setText(`${Math.round(power)} W`); this.cadence.setText(`${Math.round(this.telemetry.cadence)} RPM`); this.hr.setText(this.telemetry.heartRate ? `${Math.round(this.telemetry.heartRate)} BPM` : '—'); this.speedText.setText(`${(this.speed * 3.6).toFixed(1)} KPH`); this.lap.setText(`LAP ${Math.floor(this.distance / LAP_KM) + 1}  ·  ${this.distance.toFixed(2)} KM  ·  ${this.clock(totalSeconds - this.elapsed)}`);
+    this.drawLines(); this.drawMinimap(); this.watts.setText(`${Math.round(power)} W`); this.cadence.setText(`${Math.round(this.telemetry.cadence)} RPM`); this.hr.setText(this.telemetry.heartRate ? `${Math.round(this.telemetry.heartRate)} BPM` : '—'); this.speedText.setText(`${(this.speed * 3.6).toFixed(1)} KPH`); this.lap.setText(`LAP ${Math.floor(this.distance / LAP_KM) + 1}  ·  ${this.distance.toFixed(2)} KM  ·  ${this.clock(totalSeconds - this.elapsed)}`);
   }
 }
 
