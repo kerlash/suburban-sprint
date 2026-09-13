@@ -1,5 +1,5 @@
-const CACHE = 'suburban-sprint-v13';
-const CORE = ['./', './index.html', './src/style.css', './src/main.js', './src/sensors.js', './src/app-data.js', './src/multiplayer.js', './vendor/phaser.esm.min.js', './manifest.webmanifest', './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png', './assets/oval-track.png', './assets/rider-rear-keyed.png', './assets/rider-pedal-strip.png'];
+const CACHE = 'suburban-sprint-v14';
+const CORE = ['./', './index.html', './src/style.css', './src/main.js', './src/sensors.js', './src/app-data.js', './src/multiplayer.js', './vendor/phaser.esm.min.js', './manifest.webmanifest', './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png', './assets/rider-rear-keyed.png', './assets/rider-pedal-strip.png', './assets/nature-grass-clover.png', './assets/nature-oak-tree.png', './assets/nature-rocks-moss.png', './assets/nature-berry-shrubs.png', './assets/nature-wildflowers.png', './assets/nature-pine-tree.png'];
 self.addEventListener('install', event => event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(CORE)).then(() => self.skipWaiting())));
 self.addEventListener('activate', event => event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim())));
 self.addEventListener('fetch', event => {
