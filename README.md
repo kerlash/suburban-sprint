@@ -23,6 +23,7 @@ Localhost is treated as a secure browser context. A deployed build must use HTTP
 - Cadence-driven four-frame pedal animation, power-surge camera tracking, and multi-depth scenery motion
 - Editable rider name, FTP, weight, sound preference, fullscreen mode, and pause/resume
 - Browser-local ride history with TP training load, average %FTP, average/max power, cadence, heart rate, distance, average speed, and target score. The course is a repeating 1 km oval with a live minimap.
+- The power tile shows watts and watts per kilogram (W/kg), and the minimap includes a slow virtual pacer riding at roughly 1 W/kg so you can catch, pass, and lap him while testing position tracking.
 - Best-ride ghost using a saved one-second power trace
 - Same-device Local Peloton discovery through `BroadcastChannel`; opening a second tab creates another visible rider
 - Installable landscape PWA with offline asset caching
