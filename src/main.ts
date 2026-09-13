@@ -359,14 +359,15 @@ class RideScene extends Phaser.Scene {
     if (this.ghost.visible) { const ghost = this.project(this.ghostZ, -.34); this.ghost.setPosition(ghost.x, ghost.y).setOrigin(.5, 1).setScale(ghost.scale * .29); }
     if (!this.paused && !this.complete) { this.npcRiders[0].distanceKm += dt * .0055; this.npcRiders[1].distanceKm += dt * .0078; }
     const riderTrackDistance = this.currentTrackDistance();
+    const sideBySideProjectionScale = .055 + Math.pow(.88, 1.7) * .72;
     this.npcRiders.forEach((npc, i) => {
       const relative = Phaser.Math.Wrap(npc.distanceKm - riderTrackDistance + LAP_KM / 2, 0, LAP_KM) - LAP_KM / 2;
       const visible = relative >= -.065 && relative <= .20, fade = relative < -.025 ? Phaser.Math.Clamp((relative + .065) / .04, 0, 1) : 1;
       const z = Phaser.Math.Clamp(.88 - relative * 4.44, .06, 1.17), pos = this.project(z, npc.lane);
-      this.rivals[i].setVisible(visible).setAlpha(fade).setPosition(pos.x, pos.y).setOrigin(.5, 1).setScale(pos.scale * .29).setDepth(3);
+      this.rivals[i].setVisible(visible).setAlpha(fade).setPosition(pos.x, pos.y).setOrigin(.5, 1).setScale(this.baseRiderScale * cameraScale * pos.scale / sideBySideProjectionScale).setDepth(3);
       this.rivalLabels[i].setVisible(visible).setPosition(pos.x, pos.y - Math.max(18, pos.scale * 270)).setAlpha(fade * Phaser.Math.Clamp(pos.scale * 4, .45, 1));
     });
-    this.peers.forEach((peer, index) => { const relative = Phaser.Math.Wrap(peer.distanceKm - riderTrackDistance + LAP_KM / 2, 0, LAP_KM) - LAP_KM / 2, visible = relative >= -.065 && relative <= .20, fade = relative < -.025 ? Phaser.Math.Clamp((relative + .065) / .04, 0, 1) : 1, z = Phaser.Math.Clamp(.88 - relative * 4.44, .06, 1.17), pos = this.project(z, -.22 + index * .15); this.remoteRiders.get(peer.id)?.setVisible(visible).setAlpha(fade).setPosition(pos.x, pos.y).setOrigin(.5, 1).setScale(pos.scale * .29); });
+    this.peers.forEach((peer, index) => { const relative = Phaser.Math.Wrap(peer.distanceKm - riderTrackDistance + LAP_KM / 2, 0, LAP_KM) - LAP_KM / 2, visible = relative >= -.065 && relative <= .20, fade = relative < -.025 ? Phaser.Math.Clamp((relative + .065) / .04, 0, 1) : 1, z = Phaser.Math.Clamp(.88 - relative * 4.44, .06, 1.17), pos = this.project(z, -.22 + index * .15); this.remoteRiders.get(peer.id)?.setVisible(visible).setAlpha(fade).setPosition(pos.x, pos.y).setOrigin(.5, 1).setScale(this.baseRiderScale * cameraScale * pos.scale / sideBySideProjectionScale); });
     if (time - this.lastPelotonSend > 250) { this.lastPelotonSend = time; peloton.publish(profile.name, activeWorkout.id, power, this.distance); }
     this.drawTrackSurface(); this.drawLines(); this.drawMinimap(); const weightKg = Math.max(1, profile.weightLb * .453592), wkg = power / weightKg, displayDistance = this.currentTrackDistance(); this.watts.setText(`${Math.round(power)} W`); this.wattsPerKg.setText(`${wkg.toFixed(2)} W/KG`); this.cadence.setText(`${Math.round(this.telemetry.cadence)} RPM`); this.hr.setText(this.telemetry.heartRate ? `${Math.round(this.telemetry.heartRate)} BPM` : '—'); this.speedText.setText(`${(this.speed * 3.6).toFixed(1)} KPH`); this.lap.setText(`LAP ${Math.floor(displayDistance / LAP_KM) + 1}  ·  ${displayDistance.toFixed(2)} KM  ·  ${this.clock(totalSeconds - this.elapsed)}`);
   }
