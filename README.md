@@ -17,7 +17,7 @@ Localhost is treated as a secure browser context. A deployed build must use HTTP
 - Wahoo KICKR BIKE-tested FTMS power and cadence telemetry
 - Bluetooth Cycling Power fallback and standard Heart Rate support
 - Polar H10 and COROS-compatible heart-rate service reader
-- Optional FTMS ERG target-power control, kept off until the rider explicitly enables it
+- Optional FTMS ERG target-power control, kept off until the rider explicitly enables it. ERG on sends mission target watts; ERG off is read-only and uses bike watts to drive the display, speed, distance, and visuals.
 - 10-minute Bus Chase, 20-minute Neighborhood Tempo, and 30-minute Neighborhood Crit
 - FTP-scaled numeric targets, cadence objectives, story prompts, three-second countdowns, and synthesized audio cues
 - Cadence-driven four-frame pedal animation, power-surge camera tracking, and multi-depth scenery motion
