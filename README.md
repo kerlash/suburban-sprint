@@ -18,9 +18,11 @@ Localhost is treated as a secure browser context. A deployed build must use HTTP
 - Bluetooth Cycling Power fallback and standard Heart Rate support
 - Polar H10 and COROS-compatible heart-rate service reader
 - Optional FTMS ERG target-power control, kept off until the rider explicitly enables it. ERG on sends mission target watts; ERG off is read-only and uses bike watts to drive the display, speed, distance, and visuals.
+- Best-effort startup reconnect for the last trainer and heart-rate sensor previously authorized in Chrome or Edge; the buttons remain available for a fresh Bluetooth scan.
 - 10-minute Bus Chase, 20-minute Neighborhood Tempo, and 30-minute Neighborhood Crit
 - FTP-scaled numeric targets, cadence objectives, story prompts, three-second countdowns, and synthesized audio cues
 - Cadence-driven four-frame pedal animation, power-surge camera tracking, and multi-depth scenery motion
+- A reusable procedural velodrome surface with grass verges, curved perspective, and banked-turn movement, plus six transparent nature props and six event-day sideline props
 - Editable rider name, FTP, weight, sound preference, fullscreen mode, and pause/resume
 - Browser-local ride history with TP training load, average %FTP, average/max power, cadence, heart rate, distance, average speed, and target score. The course is a repeating 1 km oval with a live minimap.
 - The power tile shows watts and watts per kilogram (W/kg), and the minimap includes a slow virtual pacer riding at roughly 1 W/kg so you can catch, pass, and lap him while testing position tracking.
