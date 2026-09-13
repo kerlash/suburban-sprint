@@ -114,12 +114,13 @@ export class SensorHub extends EventTarget {
   }
 
   async disableTrainerControl() {
+    const wasEnabled = this.controlEnabled;
     if (this.controlEnabled) {
       try { await this.controlCommand(new Uint8Array([0x01])); }
       catch { /* Releasing local control still prevents further targets if reset is unsupported. */ }
     }
     this.controlEnabled = false;
-    this.dispatchEvent(new CustomEvent('controlstatus', { detail: 'ERG control released. Trainer telemetry remains connected.' }));
+    this.dispatchEvent(new CustomEvent('controlstatus', { detail: wasEnabled ? 'ERG released. Trainer reset requested; telemetry remains connected.' : 'ERG is already released. Trainer telemetry remains connected.' }));
   }
 
   async setTargetPower(watts: number) {
